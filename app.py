@@ -70,11 +70,19 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
     log_action(str(user["_id"]), "LOGIN")
     access_token = create_access_token(identity=str(user["_id"]))
-    return jsonify({"message": "Login successful", "user": serialize({
-        "_id": user["_id"], "username": user["username"],
-        "full_name": user["full_name"], "role": user["role"],
-        "department": user["department"], "email": user.get("email", "")
-    })})
+    return jsonify({
+    "message": "Login successful",
+    "token": access_token,
+    "user": serialize({
+        "_id": user["_id"],
+        "username": user["username"],
+        "full_name": user["full_name"],
+        "role": user["role"],
+        "department": user["department"],
+        "email": user.get("email", "")
+    })
+})
+
 
 # ─── USERS ────────────────────────────────────────────────────────────────────
 @app.route("/api/users", methods=["GET"])
