@@ -8,6 +8,8 @@ from datetime import datetime
 import hashlib
 import os
 from dotenv import load_dotenv
+import bcrypt
+import re
 
 app = Flask(__name__, static_folder='frontend', static_url_path='')
 CORS(app)
@@ -29,7 +31,12 @@ logs_col        = db["system_logs"]
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 def hash_pw(pw): # Password Hashing
-    return hashlib.sha256(pw.encode()).hexdigest()
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pw.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+def check_pw(plain_pw, hashed_pw):
+    # Safely compares a plain text password against the stored bcrypt hash
+    return bcrypt.checkpw(plain_pw.encode('utf-8'), hashed_pw.encode('utf-8'))
 
 def serialize(doc):
     if doc is None:
@@ -65,8 +72,8 @@ def seed_defaults():
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
-    user = users_col.find_one({"username": data.get("username"), "password": hash_pw(data.get("password", ""))})
-    if not user:
+    user = users_col.find_one({"username": data.get("username")})
+    if not user or not check_pw(data.get("password", ""), user["password"]):
         return jsonify({"error": "Invalid credentials"}), 401
     log_action(str(user["_id"]), "LOGIN")
     access_token = create_access_token(identity=str(user["_id"]))
