@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HR Logging System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ── RESET & VARS ─────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d0f14;
+  --surface:   #141720;
+  --panel:     #1b1f2e;
+  --border:    #252a3a;
+  --accent:    #4f7cff;
+  --accent2:   #00e5b0;
+  --warn:      #ff6b3d;
+  --text:      #e8eaf2;
+  --muted:     #6b7280;
+  --success:   #22c55e;
+  --danger:    #ef4444;
+  --pending:   #f59e0b;
+  --radius:    8px;
+  --mono:      'DM Mono', monospace;
+  --display:   'Syne', sans-serif;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; }
+
+/* ── SCROLLBAR ──────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── LOGIN PAGE ─────────────────────────────────── */
+#login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+#login-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 50%, rgba(79,124,255,0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 80% 30%, rgba(0,229,176,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.login-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px;
+  animation: fadeUp 0.5s ease both;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 36px;
+}
+.login-logo-icon {
+  width: 40px; height: 40px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.login-logo h1 {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.login-logo span { color: var(--muted); font-size: 12px; font-weight: 400; display: block; }
+.login-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; display: block; }
+.login-input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 20px;
+}
+.login-input:focus { border-color: var(--accent); }
+.login-btn {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 13px;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  margin-top: 4px;
+}
+.login-btn:hover { opacity: 0.88; }
+.login-btn:active { transform: scale(0.98); }
+.login-error { color: var(--danger); font-size: 12px; margin-top: 12px; text-align: center; min-height: 18px; }
+.login-hint {
+  margin-top: 28px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.login-hint strong { color: var(--text); }
+
+/* ── APP SHELL ──────────────────────────────────── */
+#app { display: none; height: 100vh; flex-direction: column; }
+#app.visible { display: flex; }
+
+.topbar {
+  height: 56px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.topbar-brand {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-brand-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
+.topbar-sep { flex: 1; }
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.topbar-avatar {
+  width: 30px; height: 30px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+.topbar-role {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent2);
+}
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── SIDEBAR ────────────────────────────────────── */
+.sidebar {
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.nav-section { padding: 0 12px; margin-bottom: 24px; }
+.nav-label { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; padding: 0 8px; margin-bottom: 8px; display: block; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+  user-select: none;
+}
+.nav-item:hover { background: var(--panel); color: var(--text); }
+.nav-item.active { background: rgba(79,124,255,0.12); color: var(--accent); border-color: rgba(79,124,255,0.2); }
+.nav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+/* ── CONTENT ────────────────────────────────────── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  background: var(--bg);
+}
+.page { display: none; animation: fadeIn 0.25s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+.page-title { font-family: var(--display); font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+.page-sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+/* ── STAT CARDS ─────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.stat-card.green::before { background: var(--success); }
+.stat-card.amber::before { background: var(--pending); }
+.stat-card.red::before   { background: var(--danger); }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.stat-value { font-family: var(--display); font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+.stat-icon { position: absolute; right: 16px; top: 16px; font-size: 22px; opacity: 0.2; }
+
+/* ── TABLE ──────────────────────────────────────── */
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.table-title { font-family: var(--display); font-size: 14px; font-weight: 700; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(37,42,58,0.6);
+  font-size: 13px;
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.015); }
+
+/* ── BADGES ─────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.badge-pending  { background: rgba(245,158,11,0.15);  color: var(--pending); border: 1px solid rgba(245,158,11,0.3); }
+.badge-approved { background: rgba(34,197,94,0.15);   color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+.badge-rejected { background: rgba(239,68,68,0.15);   color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
+.badge-admin    { background: rgba(239,68,68,0.12);   color: #f87171;        border: 1px solid rgba(239,68,68,0.2); }
+.badge-hr       { background: rgba(0,229,176,0.12);   color: var(--accent2); border: 1px solid rgba(0,229,176,0.2); }
+.badge-employee { background: rgba(79,124,255,0.12);  color: var(--accent);  border: 1px solid rgba(79,124,255,0.2); }
+
+/* ── BUTTONS ─────────────────────────────────────── */
+.btn {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.85; }
+.btn-success { background: rgba(34,197,94,0.15); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+.btn-success:hover { background: rgba(34,197,94,0.25); }
+.btn-danger  { background: rgba(239,68,68,0.15);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
+.btn-danger:hover  { background: rgba(239,68,68,0.25); }
+.btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover   { color: var(--text); border-color: var(--muted); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+/* ── FORMS & MODALS ──────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  width: 460px;
+  max-width: 95vw;
+  transform: translateY(16px);
+  transition: transform 0.2s;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-title { font-family: var(--display); font-size: 18px; font-weight: 700; margin-bottom: 24px; }
+.form-row { margin-bottom: 16px; }
+.form-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+.form-select option { background: var(--panel); }
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+/* ── ATTENDANCE CLOCK ─────────────────────────────── */
+.clock-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+.clock-time {
+  font-family: var(--display);
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  color: var(--accent);
+  min-width: 200px;
+}
+.clock-date { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.clock-actions { display: flex; gap: 12px; }
+.clock-btn {
+  padding: 14px 28px;
+  border-radius: 10px;
+  border: none;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.clock-in  { background: var(--success); color: #fff; }
+.clock-in:hover  { opacity: 0.85; }
+.clock-out { background: var(--danger); color: #fff; }
+.clock-out:hover { opacity: 0.85; }
+.clock-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── TOAST ───────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 28px; right: 28px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 13px;
+  z-index: 9999;
+  transform: translateY(80px);
+  opacity: 0;
+  transition: all 0.3s;
+  max-width: 320px;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.success { border-color: rgba(34,197,94,0.4); color: var(--success); }
+#toast.error   { border-color: rgba(239,68,68,0.4);  color: var(--danger); }
+
+/* ── EMPTY STATE ─────────────────────────────────── */
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.empty-icon { font-size: 32px; margin-bottom: 12px; }
+
+/* ── PROFILE CARD ────────────────────────────────── */
+.profile-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.profile-avatar {
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.profile-name { font-family: var(--display); font-size: 20px; font-weight: 700; }
+.profile-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.profile-meta span { color: var(--text); }
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.info-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.info-key { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+.info-val { font-size: 14px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ LOGIN ═══════════ -->
+<div id="login-page">
+  <div class="login-grid"></div>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">🏢</div>
+      <div>
+        <h1>HR SYSTEM</h1>
+        <span>Logging & Management Platform</span>
+      </div>
+    </div>
+    <label class="login-label">Username</label>
+    <input class="login-input" id="login-user" type="text" placeholder="Enter username" autocomplete="off"/>
+    <label class="login-label">Password</label>
+    <input class="login-input" id="login-pass" type="password" placeholder="Enter password"/>
+    <button class="login-btn" onclick="doLogin()">Sign In →</button>
+    <div class="login-error" id="login-err"></div>
+    <div class="login-hint">
+      <strong>admin</strong> / admin123 — System Admin<br>
+      <strong>hr_staff</strong> / hr123 — HR Manager<br>
+      <strong>john_doe</strong> / employee123 — Employee
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ APP ═══════════ -->
+<div id="app">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-dot"></div>
+      HR LOGGING SYSTEM
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-user">
+      <div class="topbar-avatar" id="top-avatar">?</div>
+      <span id="top-name">—</span>
+      <span class="topbar-role" id="top-role">—</span>
+      <button class="logout-btn" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar"></div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- ── Dashboard ── -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Dashboard</div>
+            <div class="page-sub" id="dash-greeting">Welcome back</div>
+          </div>
+          <button class="btn btn-primary" onclick="loadDashboard()">↻ Refresh</button>
+        </div>
+        <div class="stats-grid" id="stats-grid"></div>
+        <div id="dash-extra"></div>
+      </div>
+
+      <!-- ── Attendance ── -->
+      <div class="page" id="page-attendance">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Attendance</div>
+            <div class="page-sub">Track your daily time in / time out</div>
+          </div>
+        </div>
+        <div class="clock-card">
+          <div>
+            <div class="clock-time" id="live-clock">--:--:--</div>
+            <div class="clock-date" id="live-date">—</div>
+          </div>
+          <div class="clock-actions">
+            <button class="clock-btn clock-in"  id="btn-timein"  onclick="doTimeIn()">⏺ Time In</button>
+            <button class="clock-btn clock-out" id="btn-timeout" onclick="doTimeOut()">⏹ Time Out</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header"><span class="table-title">Recent Attendance (Last 30 Days)</span></div>
+          <table><thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>Overtime</th></tr></thead>
+          <tbody id="attendance-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── Leave ── -->
+      <div class="page" id="page-leave">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Leave Requests</div>
+            <div class="page-sub">Submit and track your leave applications</div>
+          </div>
+          <button class="btn btn-primary" onclick="openLeaveModal()">+ New Request</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header"><span class="table-title">My Leave History</span></div>
+          <table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Applied</th></tr></thead>
+          <tbody id="leave-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── Payslips ── -->
+      <div class="page" id="page-payslips">
+        <div class="page-header">
+          <div><div class="page-title">Payslips</div><div class="page-sub">View your salary records</div></div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header"><span class="table-title">Payslip Records</span></div>
+          <table><thead><tr><th>Period</th><th>Basic Pay</th><th>OT Pay</th><th>Deductions</th><th>Net Pay</th></tr></thead>
+          <tbody id="payslips-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── HR: All Attendance ── -->
+      <div class="page" id="page-hr-attendance">
+        <div class="page-header">
+          <div><div class="page-title">Attendance Monitor</div><div class="page-sub">All employee attendance logs</div></div>
+          <button class="btn btn-primary" onclick="loadHRAttendance()">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Employee</th><th>Dept</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>OT</th></tr></thead>
+          <tbody id="hr-attendance-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── HR: Leave Approvals ── -->
+      <div class="page" id="page-hr-leave">
+        <div class="page-header">
+          <div><div class="page-title">Leave Approvals</div><div class="page-sub">Review and manage leave requests</div></div>
+          <button class="btn btn-primary" onclick="loadHRLeave()">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Employee</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="hr-leave-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── HR: Reports ── -->
+      <div class="page" id="page-hr-reports">
+        <div class="page-header">
+          <div><div class="page-title">Reports</div><div class="page-sub">Generate workforce insights</div></div>
+          <button class="btn btn-primary" onclick="loadHRReports()">↻ Refresh</button>
+        </div>
+        <div class="stats-grid" id="report-stats"></div>
+        <div id="report-extra"></div>
+      </div>
+
+      <!-- ── Admin: Users ── -->
+      <div class="page" id="page-admin-users">
+        <div class="page-header">
+          <div><div class="page-title">User Management</div><div class="page-sub">Create and manage accounts</div></div>
+          <button class="btn btn-primary" onclick="openUserModal()">+ Add User</button>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Department</th><th>Email</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="users-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── Admin: Logs ── -->
+      <div class="page" id="page-admin-logs">
+        <div class="page-header">
+          <div><div class="page-title">System Logs</div><div class="page-sub">Full audit trail</div></div>
+          <button class="btn btn-primary" onclick="loadLogs()">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Timestamp</th><th>User ID</th><th>Action</th><th>Details</th></tr></thead>
+          <tbody id="logs-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ── Profile ── -->
+      <div class="page" id="page-profile">
+        <div class="page-header">
+          <div><div class="page-title">My Profile</div><div class="page-sub">Personal information</div></div>
+        </div>
+        <div id="profile-content"></div>
+      </div>
+
+      <!-- ── Admin: Payslip Add ── -->
+      <div class="page" id="page-admin-payslips">
+        <div class="page-header">
+          <div><div class="page-title">Payslip Management</div><div class="page-sub">Add payslip records for employees</div></div>
+          <button class="btn btn-primary" onclick="openPayslipModal()">+ Add Payslip</button>
+        </div>
+        <div id="payslip-mgmt-content">
+          <div class="empty"><div class="empty-icon">💰</div>Select an employee to view payslips</div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main-layout -->
+</div><!-- /app -->
+
+<!-- ── Modals ── -->
+<div class="modal-overlay" id="modal-leave">
+  <div class="modal">
+    <div class="modal-title">📅 Submit Leave Request</div>
+    <div class="form-row">
+      <label class="form-label">Leave Type</label>
+      <select class="form-select" id="lv-type">
+        <option>Vacation</option><option>Sick Leave</option><option>Emergency</option><option>Maternity/Paternity</option><option>Other</option>
+      </select>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Start Date</label>
+        <input class="form-input" type="date" id="lv-start"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">End Date</label>
+        <input class="form-input" type="date" id="lv-end"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Reason</label>
+      <textarea class="form-textarea" id="lv-reason" placeholder="Brief reason for leave..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-leave')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitLeave()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-user">
+  <div class="modal">
+    <div class="modal-title" id="user-modal-title">👤 Create User</div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Full Name</label>
+        <input class="form-input" id="u-name" placeholder="Full Name"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Username</label>
+        <input class="form-input" id="u-username" placeholder="username"/>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="u-password" placeholder="Password"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Role</label>
+        <select class="form-select" id="u-role">
+          <option value="employee">Employee</option>
+          <option value="hr">HR Staff</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Department</label>
+        <input class="form-input" id="u-dept" placeholder="e.g. Engineering"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="u-email" placeholder="email@company.com"/>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-payslip">
+  <div class="modal">
+    <div class="modal-title">💰 Add Payslip</div>
+    <div class="form-row">
+      <label class="form-label">Employee</label>
+      <select class="form-select" id="ps-user"></select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Period (e.g. 2025-03)</label>
+      <input class="form-input" id="ps-period" placeholder="YYYY-MM"/>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Basic Pay</label>
+        <input class="form-input" type="number" id="ps-basic" placeholder="0.00"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">OT Pay</label>
+        <input class="form-input" type="number" id="ps-ot" placeholder="0.00"/>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Deductions</label>
+        <input class="form-input" type="number" id="ps-deduct" placeholder="0.00"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Net Pay (auto)</label>
+        <input class="form-input" id="ps-net" placeholder="—" readonly/>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-payslip')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePayslip()">Save Payslip</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let currentUser = null;
+
+// ── UTILS ────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function toast(msg, type = 'success') {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  setTimeout(() => el.className = '', 2800);
+}
+function fmt(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return iso.split('T')[0];
+}
+function calcHours(tin, tout) {
+  if (!tin || !tout) return '—';
+  const h = (new Date(tout) - new Date(tin)) / 3600000;
+  return h.toFixed(2) + 'h';
+}
+function openModal(id)  { $(id).classList.add('open'); }
+function closeModal(id) { $(id).classList.remove('open'); }
+
+async function api(path, method = 'GET', body = null) {
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (r.status === 401 && path !== '/api/login') {
+      doLogout();
+      toast("Session expired. Please log in again.", "error");
+      return { error: "Unauthorized" };
+  }
+  
+  return r.json();
+}
+
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const username = $('login-user').value.trim();
+  const password = $('login-pass').value;
+  if (!username || !password) { $('login-err').textContent = 'Please enter credentials'; return; }
+  const res = await api('/api/login', 'POST', {username, password});
+  if (res.error) { $('login-err').textContent = res.error; return; }
+  localStorage.setItem('access_token', res.token);
+  currentUser = res.user;
+  $('login-err').textContent = '';
+  $('login-page').style.display = 'none';
+  $('app').classList.add('visible');
+  $('top-name').textContent = currentUser.full_name;
+  $('top-role').textContent = currentUser.role.toUpperCase();
+  $('top-avatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
+  buildSidebar();
+  showPage('dashboard');
+}
+$('login-pass').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
+$('login-user').addEventListener('keydown', e => e.key === 'Enter' && $('login-pass').focus());
+
+function doLogout() {
+  currentUser = null;
+  localStorage.removeItem('access_token');
+  $('app').classList.remove('visible');
+  $('login-page').style.display = 'flex';
+  $('login-user').value = '';
+  $('login-pass').value = '';
+}
+
+// ── SIDEBAR ──────────────────────────────────────────────────────────────────
+function buildSidebar() {
+  const role = currentUser.role;
+  let html = '';
+
+  html += `<div class="nav-section"><span class="nav-label">Main</span>
+    <div class="nav-item" onclick="showPage('dashboard')"><span class="nav-icon">⬛</span> Dashboard</div>
+    <div class="nav-item" onclick="showPage('profile')"><span class="nav-icon">👤</span> My Profile</div>
+  </div>`;
+
+  if (role === 'employee' || role === 'hr' || role === 'admin') {
+    html += `<div class="nav-section"><span class="nav-label">Employee</span>
+      <div class="nav-item" onclick="showPage('attendance')"><span class="nav-icon">🕐</span> Attendance</div>
+      <div class="nav-item" onclick="showPage('leave')"><span class="nav-icon">📅</span> Leave Requests</div>
+      <div class="nav-item" onclick="showPage('payslips')"><span class="nav-icon">💵</span> My Payslips</div>
+    </div>`;
+  }
+
+  if (role === 'hr' || role === 'admin') {
+    html += `<div class="nav-section"><span class="nav-label">HR Tools</span>
+      <div class="nav-item" onclick="showPage('hr-attendance')"><span class="nav-icon">📋</span> Attendance Log</div>
+      <div class="nav-item" onclick="showPage('hr-leave')"><span class="nav-icon">✅</span> Leave Approvals</div>
+      <div class="nav-item" onclick="showPage('hr-reports')"><span class="nav-icon">📊</span> Reports</div>
+    </div>`;
+  }
+
+  if (role === 'admin') {
+    html += `<div class="nav-section"><span class="nav-label">Admin</span>
+      <div class="nav-item" onclick="showPage('admin-users')"><span class="nav-icon">👥</span> User Management</div>
+      <div class="nav-item" onclick="showPage('admin-payslips')"><span class="nav-icon">💰</span> Payslips</div>
+      <div class="nav-item" onclick="showPage('admin-logs')"><span class="nav-icon">🔍</span> System Logs</div>
+    </div>`;
+  }
+
+  $('sidebar').innerHTML = html;
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  $(`page-${name}`).classList.add('active');
+  const items = document.querySelectorAll('.nav-item');
+  items.forEach(i => { if (i.getAttribute('onclick')?.includes(name)) i.classList.add('active'); });
+
+  const loaders = {
+    'dashboard':       loadDashboard,
+    'attendance':      loadAttendance,
+    'leave':           loadLeave,
+    'payslips':        loadPayslips,
+    'hr-attendance':   loadHRAttendance,
+    'hr-leave':        loadHRLeave,
+    'hr-reports':      loadHRReports,
+    'admin-users':     loadUsers,
+    'admin-logs':      loadLogs,
+    'profile':         loadProfile,
+    'admin-payslips':  loadAdminPayslips,
+  };
+  if (loaders[name]) loaders[name]();
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const role = currentUser.role;
+  $('dash-greeting').textContent = `Welcome back, ${currentUser.full_name} · ${new Date().toDateString()}`;
+  const summary = await api('/api/reports/summary');
+
+  const statsEl = $('stats-grid');
+  if (role === 'admin' || role === 'hr') {
+    statsEl.innerHTML = `
+      <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-label">Total Users</div><div class="stat-value">${summary.total_users}</div></div>
+      <div class="stat-card green"><span class="stat-icon">✅</span><div class="stat-label">Present Today</div><div class="stat-value">${summary.present_today}</div></div>
+      <div class="stat-card amber"><span class="stat-icon">📅</span><div class="stat-label">Pending Leaves</div><div class="stat-value">${summary.pending_leave}</div></div>
+      <div class="stat-card"><span class="stat-icon">⏰</span><div class="stat-label">Total OT Hours</div><div class="stat-value">${summary.total_overtime_hours}</div></div>
+    `;
+  } else {
+    const att = await api(`/api/attendance/${currentUser._id}`);
+    const lvs = await api(`/api/leave/${currentUser._id}`);
+    const todayRec = att.find(a => a.date === new Date().toISOString().split('T')[0]);
+    const pendingLvs = lvs.filter(l => l.status === 'pending').length;
+    statsEl.innerHTML = `
+      <div class="stat-card ${todayRec?.time_in ? 'green' : 'red'}">
+        <span class="stat-icon">🕐</span>
+        <div class="stat-label">Today Status</div>
+        <div class="stat-value" style="font-size:20px">${todayRec?.time_in ? (todayRec?.time_out ? 'Completed' : 'Clocked In') : 'Absent'}</div>
+      </div>
+      <div class="stat-card"><span class="stat-icon">📅</span><div class="stat-label">Pending Leaves</div><div class="stat-value">${pendingLvs}</div></div>
+      <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-label">Attendance Records</div><div class="stat-value">${att.length}</div></div>
+    `;
+  }
+}
+
+// ── LIVE CLOCK ────────────────────────────────────────────────────────────────
+setInterval(() => {
+  if (!$('live-clock')) return;
+  const now = new Date();
+  $('live-clock').textContent = now.toLocaleTimeString();
+  $('live-date').textContent = now.toDateString();
+}, 1000);
+
+// ── ATTENDANCE ────────────────────────────────────────────────────────────────
+async function loadAttendance() {
+  const records = await api(`/api/attendance/${currentUser._id}`);
+  const today = new Date().toISOString().split('T')[0];
+  const todayRec = records.find(r => r.date === today);
+  $('btn-timein').disabled  = !!(todayRec?.time_in);
+  $('btn-timeout').disabled = !!(todayRec?.time_out) || !(todayRec?.time_in);
+  const tbody = $('attendance-tbody');
+  if (!records.length) { tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📋</div>No records yet</div></td></tr>`; return; }
+  tbody.innerHTML = records.map(r => {
+    const hrs = r.time_in && r.time_out ? ((new Date(r.time_out)-new Date(r.time_in))/3600000).toFixed(2)+'h' : '—';
+    return `<tr><td>${r.date}</td><td>${fmt(r.time_in)}</td><td>${fmt(r.time_out)}</td><td>${hrs}</td><td>${r.overtime_hours > 0 ? '+'+r.overtime_hours+'h' : '—'}</td></tr>`;
+  }).join('');
+}
+
+async function doTimeIn() {
+  const res = await api('/api/attendance/timein', 'POST', {user_id: currentUser._id});
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast(`✅ Timed in at ${fmt(res.time)}`);
+  loadAttendance();
+}
+async function doTimeOut() {
+  const res = await api('/api/attendance/timeout', 'POST', {user_id: currentUser._id});
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast(`✅ Timed out · ${res.hours_worked}h worked · OT: ${res.overtime}h`);
+  loadAttendance();
+}
+
+// ── LEAVE ─────────────────────────────────────────────────────────────────────
+async function loadLeave() {
+  const records = await api(`/api/leave/${currentUser._id}`);
+  const tbody = $('leave-tbody');
+  if (!records.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">📅</div>No leave requests yet</div></td></tr>`; return; }
+  tbody.innerHTML = records.map(r => `<tr>
+    <td>${r.leave_type}</td>
+    <td>${r.start_date}</td><td>${r.end_date}</td>
+    <td>${r.reason||'—'}</td>
+    <td><span class="badge badge-${r.status}">${r.status}</span></td>
+    <td>${fmtDate(r.created_at)}</td>
+  </tr>`).join('');
+}
+function openLeaveModal() {
+  const today = new Date().toISOString().split('T')[0];
+  $('lv-start').value = today; $('lv-end').value = today;
+  openModal('modal-leave');
+}
+async function submitLeave() {
+  const res = await api('/api/leave', 'POST', {
+    user_id: currentUser._id,
+    leave_type: $('lv-type').value,
+    start_date: $('lv-start').value,
+    end_date: $('lv-end').value,
+    reason: $('lv-reason').value
+  });
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('✅ Leave request submitted');
+  closeModal('modal-leave');
+  loadLeave();
+}
+
+// ── PAYSLIPS ──────────────────────────────────────────────────────────────────
+async function loadPayslips() {
+  const records = await api(`/api/payslips/${currentUser._id}`);
+  const tbody = $('payslips-tbody');
+  if (!records.length) { tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">💵</div>No payslips available yet</div></td></tr>`; return; }
+  tbody.innerHTML = records.map(r => `<tr>
+    <td>${r.period}</td>
+    <td>₱${Number(r.basic_pay||0).toLocaleString()}</td>
+    <td>₱${Number(r.ot_pay||0).toLocaleString()}</td>
+    <td>₱${Number(r.deductions||0).toLocaleString()}</td>
+    <td><strong>₱${Number(r.net_pay||0).toLocaleString()}</strong></td>
+  </tr>`).join('');
+}
+
+// ── HR: ATTENDANCE ────────────────────────────────────────────────────────────
+async function loadHRAttendance() {
+  const records = await api('/api/attendance/all');
+  const tbody = $('hr-attendance-tbody');
+  if (!records.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">📋</div>No records</div></td></tr>`; return; }
+  tbody.innerHTML = records.map(r => {
+    const hrs = r.time_in && r.time_out ? ((new Date(r.time_out)-new Date(r.time_in))/3600000).toFixed(2) : null;
+    return `<tr>
+      <td>${r.full_name||r.user_id}</td>
+      <td>${r.department||'—'}</td>
+      <td>${r.date}</td>
+      <td>${fmt(r.time_in)}</td><td>${fmt(r.time_out)}</td>
+      <td>${hrs ? hrs+'h' : '—'}</td>
+      <td>${r.overtime_hours > 0 ? '+'+r.overtime_hours+'h' : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── HR: LEAVE APPROVALS ───────────────────────────────────────────────────────
+async function loadHRLeave() {
+  const records = await api('/api/leave/all');
+  const tbody = $('hr-leave-tbody');
+  if (!records.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📅</div>No leave requests</div></td></tr>`; return; }
+  tbody.innerHTML = records.map(r => `<tr>
+    <td>${r.full_name||r.user_id}</td>
+    <td>${r.department||'—'}</td>
+    <td>${r.leave_type}</td>
+    <td>${r.start_date}</td><td>${r.end_date}</td>
+    <td>${r.reason||'—'}</td>
+    <td><span class="badge badge-${r.status}">${r.status}</span></td>
+    <td>
+      ${r.status==='pending' ? `
+        <button class="btn btn-success btn-sm" onclick="reviewLeave('${r._id}','approved')">✓ Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="reviewLeave('${r._id}','rejected')">✗ Reject</button>
+      ` : '—'}
+    </td>
+  </tr>`).join('');
+}
+async function reviewLeave(id, status) {
+  const res = await api(`/api/leave/${id}/review`, 'PUT', {status, reviewed_by: currentUser._id});
+  toast(res.error ? res.error : `✅ Leave ${status}`);
+  loadHRLeave();
+}
+
+// ── HR: REPORTS ───────────────────────────────────────────────────────────────
+async function loadHRReports() {
+  const s = await api('/api/reports/summary');
+  const all_leave = await api('/api/leave/all');
+  const approved = all_leave.filter(l=>l.status==='approved').length;
+  const rejected = all_leave.filter(l=>l.status==='rejected').length;
+  $('report-stats').innerHTML = `
+    <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-label">Total Users</div><div class="stat-value">${s.total_users}</div></div>
+    <div class="stat-card green"><span class="stat-icon">🟢</span><div class="stat-label">Present Today</div><div class="stat-value">${s.present_today}</div></div>
+    <div class="stat-card amber"><span class="stat-icon">⏳</span><div class="stat-label">Pending Leaves</div><div class="stat-value">${s.pending_leave}</div></div>
+    <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-label">Approved Leaves</div><div class="stat-value">${approved}</div></div>
+    <div class="stat-card red"><span class="stat-icon">❌</span><div class="stat-label">Rejected Leaves</div><div class="stat-value">${rejected}</div></div>
+    <div class="stat-card"><span class="stat-icon">⏰</span><div class="stat-label">Total OT Hours</div><div class="stat-value">${s.total_overtime_hours}</div></div>
+  `;
+}
+
+// ── ADMIN: USERS ──────────────────────────────────────────────────────────────
+async function loadUsers() {
+  const users = await api('/api/users');
+  const tbody = $('users-tbody');
+  tbody.innerHTML = users.map(u => `<tr>
+    <td>${u.full_name}</td>
+    <td><code>${u.username}</code></td>
+    <td><span class="badge badge-${u.role}">${u.role}</span></td>
+    <td>${u.department||'—'}</td>
+    <td>${u.email||'—'}</td>
+    <td>${fmtDate(u.created_at)}</td>
+    <td>
+      <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}','${u.username}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+function openUserModal() { openModal('modal-user'); }
+async function saveUser() {
+  const res = await api('/api/users', 'POST', {
+    full_name: $('u-name').value,
+    username:  $('u-username').value,
+    password:  $('u-password').value,
+    role:      $('u-role').value,
+    department:$('u-dept').value,
+    email:     $('u-email').value,
+    admin_id:  currentUser._id
+  });
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('✅ User created');
+  closeModal('modal-user');
+  loadUsers();
+}
+async function deleteUser(id, name) {
+  if (!confirm(`Delete user "${name}"?`)) return;
+  await api(`/api/users/${id}`, 'DELETE');
+  toast(`🗑️ Deleted ${name}`);
+  loadUsers();
+}
+
+// ── ADMIN: LOGS ───────────────────────────────────────────────────────────────
+async function loadLogs() {
+  const logs = await api('/api/logs');
+  const tbody = $('logs-tbody');
+  if (!logs.length) { tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔍</div>No logs</div></td></tr>`; return; }
+  tbody.innerHTML = logs.map(l => `<tr>
+    <td style="color:var(--muted);font-size:12px">${l.timestamp?.replace('T',' ').split('.')[0]||'—'}</td>
+    <td><code style="font-size:11px">${l.user_id?.slice(-8)||'—'}</code></td>
+    <td><span style="color:var(--accent2)">${l.action}</span></td>
+    <td style="color:var(--muted)">${l.details||'—'}</td>
+  </tr>`).join('');
+}
+
+// ── PROFILE ───────────────────────────────────────────────────────────────────
+function loadProfile() {
+  const u = currentUser;
+  $('profile-content').innerHTML = `
+    <div class="profile-card">
+      <div class="profile-avatar">${u.full_name.charAt(0).toUpperCase()}</div>
+      <div>
+        <div class="profile-name">${u.full_name}</div>
+        <div class="profile-meta">@${u.username} · <span>${u.department}</span></div>
+        <div style="margin-top:8px"><span class="badge badge-${u.role}">${u.role}</span></div>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="info-key">Full Name</div><div class="info-val">${u.full_name}</div></div>
+      <div class="info-item"><div class="info-key">Username</div><div class="info-val">${u.username}</div></div>
+      <div class="info-item"><div class="info-key">Email</div><div class="info-val">${u.email||'—'}</div></div>
+      <div class="info-item"><div class="info-key">Department</div><div class="info-val">${u.department||'—'}</div></div>
+      <div class="info-item"><div class="info-key">Role</div><div class="info-val">${u.role}</div></div>
+    </div>
+  `;
+}
+
+// ── ADMIN: PAYSLIPS ───────────────────────────────────────────────────────────
+async function loadAdminPayslips() {
+  // Populates user dropdown in payslip modal
+  const users = await api('/api/users');
+  const employees = users.filter(u => u.role === 'employee');
+  $('ps-user').innerHTML = employees.map(u => `<option value="${u._id}">${u.full_name}</option>`).join('');
+}
+function openPayslipModal() {
+  // Compute net pay
+  ['ps-basic','ps-ot','ps-deduct'].forEach(id => {
+    $(id).addEventListener('input', () => {
+      const net = (parseFloat($('ps-basic').value)||0) + (parseFloat($('ps-ot').value)||0) - (parseFloat($('ps-deduct').value)||0);
+      $('ps-net').value = net.toFixed(2);
+    });
+  });
+  openModal('modal-payslip');
+}
+async function savePayslip() {
+  const net = (parseFloat($('ps-basic').value)||0) + (parseFloat($('ps-ot').value)||0) - (parseFloat($('ps-deduct').value)||0);
+  const res = await api('/api/payslips', 'POST', {
+    user_id:    $('ps-user').value,
+    period:     $('ps-period').value,
+    basic_pay:  parseFloat($('ps-basic').value)||0,
+    ot_pay:     parseFloat($('ps-ot').value)||0,
+    deductions: parseFloat($('ps-deduct').value)||0,
+    net_pay:    net
+  });
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('✅ Payslip saved');
+  closeModal('modal-payslip');
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
