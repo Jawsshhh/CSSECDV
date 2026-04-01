@@ -4,12 +4,13 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import os
 from dotenv import load_dotenv
 import bcrypt
 import re
+
 
 app = Flask(__name__, static_folder='frontend', static_url_path='')
 CORS(app)
@@ -67,13 +68,67 @@ def seed_defaults():
         users_col.insert_many(defaults)
         print("✅  Seeded default users.")
 
+MAX_ATTEMPTS   = 5
+LOCKOUT_MINUTES = 15
+
+def is_account_locked(user):
+    if not user.get("locked_until"):
+        return False, None
+    locked_until = datetime.fromisoformat(user["locked_until"])
+    if datetime.utcnow() < locked_until:
+        remaining = int((locked_until - datetime.utcnow()).total_seconds() / 60) + 1
+        return True, remaining
+    # Lockout expired 
+    users_col.update_one(
+        {"_id": user["_id"]},
+        {"$unset": {"locked_until": "", "failed_attempts": ""}}
+    )
+    return False, None
+
+def record_failed_attempt(user):
+    attempts = user.get("failed_attempts", 0) + 1
+    if attempts >= MAX_ATTEMPTS:
+        locked_until = (datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
+        users_col.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"failed_attempts": attempts, "locked_until": locked_until}}
+        )
+        log_action(str(user["_id"]), "ACCOUNT_LOCKED", f"After {attempts} failed attempts")
+    else:
+        users_col.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"failed_attempts": attempts}}
+        )
+
 # Login/Authentication
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
     user = users_col.find_one({"username": data.get("username")})
-    if not user or not check_pw(data.get("password", ""), user["password"]):
+
+    if not user:
         return jsonify({"error": "Invalid credentials"}), 401
+
+    locked, remaining = is_account_locked(user)
+    if locked:
+        log_action(str(user["_id"]), "LOGIN_BLOCKED", f"{remaining}min remaining")
+        return jsonify({
+            "error": f"Account locked. Try again in {remaining} minute{'s' if remaining != 1 else ''}."
+        }), 423  # 423 Locked
+
+
+    if not check_pw(data.get("password", ""), user["password"]):
+        record_failed_attempt(user)
+        attempts_left = MAX_ATTEMPTS - user.get("failed_attempts", 0) - 1
+        if attempts_left <= 0:
+            return jsonify({"error": f"Account locked for {LOCKOUT_MINUTES} minutes due to too many failed attempts."}), 423
+        return jsonify({"error": f"Invalid credentials. {attempts_left} attempt{'s' if attempts_left != 1 else ''} remaining."}), 401
+
+    users_col.update_one(
+        {"_id": user["_id"]},
+        {"$unset": {"failed_attempts": "", "locked_until": ""}}
+    )
+
     log_action(str(user["_id"]), "LOGIN")
     access_token = create_access_token(identity=str(user["_id"]))
     return jsonify({
@@ -272,6 +327,7 @@ def summary_report():
 def get_logs():
     logs = list(logs_col.find({}).sort("timestamp", -1).limit(100))
     return jsonify(serialize(logs))
+
 
 # Frontend
 @app.route("/")

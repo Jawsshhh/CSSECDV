@@ -870,7 +870,11 @@ async function api(path, method = 'GET', body = null) {
       toast("Session expired. Please log in again.", "error");
       return { error: "Unauthorized" };
   }
-  
+  if (r.status === 423) {
+    const data = await r.json();
+    return { error: data.error, locked: true };
+  }
+
   return r.json();
 }
 
@@ -880,6 +884,18 @@ async function doLogin() {
   const password = $('login-pass').value;
   if (!username || !password) { $('login-err').textContent = 'Please enter credentials'; return; }
   const res = await api('/api/login', 'POST', {username, password});
+  if (res.error) {
+    $('login-err').textContent = res.error;
+    if (res.locked) {
+      $('login-err').style.color = 'var(--warn)';   
+      $('login-pass').disabled = true;
+      $('login-user').disabled = true;
+    }
+    return;
+  }
+  // Re-enable inputs on success 
+  $('login-pass').disabled = false;
+  $('login-user').disabled = false;
   if (res.error) { $('login-err').textContent = res.error; return; }
   localStorage.setItem('access_token', res.token);
   currentUser = res.user;
