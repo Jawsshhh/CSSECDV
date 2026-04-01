@@ -66,7 +66,7 @@ def seed_defaults():
         ]
         for u in defaults:
             u["created_at"] = datetime.utcnow().isoformat()
-            u["password_changed_at"] = datetime.utcnow().isoformat()
+            u["password_changed_at"] = None
             u["password_history"] = [u["password"]]   # store initial hash in history
             u["security_question"] = None
             u["security_answer_hash"] = None
@@ -196,14 +196,21 @@ def create_user():
     data = request.json
     if users_col.find_one({"username": data["username"]}):
         return jsonify({"error": "Username already exists"}), 400
+    hashed_pw = hash_pw(data["password"])
     user = {
         "username":   data["username"],
-        "password":   hash_pw(data["password"]),
+        "password":   hashed_pw,
         "full_name":  data["full_name"],
         "role":       data["role"],
         "department": data.get("department", "General"),
         "email":      data.get("email", ""),
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": datetime.utcnow().isoformat(),
+        "password_changed_at": None,
+        "password_history": [hashed_pw],
+        "security_question": None,
+        "security_answer_hash": None,
+        "last_login": None,
+        "last_failed_login": None
     }
     result = users_col.insert_one(user)
     log_action(data.get("admin_id", "system"), "CREATE_USER", data["username"])

@@ -1412,9 +1412,13 @@ async function openChangePasswordModal() {
     : 'Security Question (not set — please set one first)';
 
   if (!q) {
-    toast('⚠️ Please set a security question first.', 'error');
-    openSecurityQuestionModal();
-    return;
+    $('cp-sec-question-label').textContent = 'Security Question (Not set - leave blank)';
+    $('cp-sec-answer').disabled = true;
+    $('cp-sec-answer').placeholder = 'N/A';
+  } else {
+    $('cp-sec-question-label').textContent = `Security Question: ${q}`;
+    $('cp-sec-answer').disabled = false;
+    $('cp-sec-answer').placeholder = 'Your answer';
   }
   openModal('modal-change-password');
 }
@@ -1445,7 +1449,10 @@ async function submitChangePassword() {
   const confirm = $('cp-confirm').value;
 
   if (!current)  { $('cp-error').textContent = 'Enter your current password.'; return; }
-  if (!answer)   { $('cp-error').textContent = 'Enter your security answer.'; return; }
+  if (currentUser.security_question && !answer) { 
+      $('cp-error').textContent = 'Enter your security answer.'; 
+      return; 
+  }
   if (!newPw)    { $('cp-error').textContent = 'Enter a new password.'; return; }
   if (newPw !== confirm) { $('cp-error').textContent = 'New passwords do not match.'; return; }
 
