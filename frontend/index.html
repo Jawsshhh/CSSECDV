@@ -689,7 +689,12 @@ tr:hover td { background: rgba(255,255,255,0.015); }
       <div class="page" id="page-profile">
         <div class="page-header">
           <div><div class="page-title">My Profile</div><div class="page-sub">Personal information</div></div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-ghost" onclick="openSecurityQuestionModal()">🔐 Security Question</button>
+            <button class="btn btn-primary" onclick="openChangePasswordModal()">🔑 Change Password</button>
+          </div>
         </div>
+        <div id="last-login-banner" style="display:none;margin-bottom:16px"></div>
         <div id="profile-content"></div>
       </div>
 
@@ -821,6 +826,64 @@ tr:hover td { background: rgba(255,255,255,0.015); }
   </div>
 </div>
 
+
+<!-- ── Change Password Modal ── -->
+<div class="modal-overlay" id="modal-change-password">
+  <div class="modal">
+    <div class="modal-title">🔑 Change Password</div>
+    <div style="background:rgba(79,124,255,0.08);border:1px solid rgba(79,124,255,0.2);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--muted);line-height:1.7">
+      ⚠️ Re-authentication required. You must enter your current password and answer your security question to proceed.
+    </div>
+    <div class="form-row">
+      <label class="form-label">Current Password <span style="color:var(--danger)">*</span></label>
+      <input class="form-input" type="password" id="cp-current" placeholder="Your current password" autocomplete="current-password"/>
+    </div>
+    <div class="form-row">
+      <label class="form-label" id="cp-sec-question-label">Security Question</label>
+      <input class="form-input" type="text" id="cp-sec-answer" placeholder="Your answer" autocomplete="off"/>
+    </div>
+    <hr style="border-color:var(--border);margin:16px 0"/>
+    <div class="form-row">
+      <label class="form-label">New Password <span style="color:var(--danger)">*</span></label>
+      <input class="form-input" type="password" id="cp-new" placeholder="Min 8 chars, upper, lower, digit, symbol" autocomplete="new-password" oninput="checkPasswordStrength(this.value)"/>
+      <div id="cp-strength-bar" style="margin-top:6px;height:4px;border-radius:2px;background:var(--border);overflow:hidden"><div id="cp-strength-fill" style="height:100%;width:0%;transition:width 0.3s,background 0.3s"></div></div>
+      <div id="cp-strength-label" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Confirm New Password <span style="color:var(--danger)">*</span></label>
+      <input class="form-input" type="password" id="cp-confirm" placeholder="Repeat new password" autocomplete="new-password"/>
+    </div>
+    <div id="cp-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-change-password')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitChangePassword()">Change Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Security Question Modal ── -->
+<div class="modal-overlay" id="modal-security-question">
+  <div class="modal">
+    <div class="modal-title">🔐 Security Question Setup</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.6">
+      Your security question will be required to verify your identity when changing your password. Choose a question with a unique, personal answer.
+    </div>
+    <div class="form-row">
+      <label class="form-label">Question</label>
+      <select class="form-select" id="sq-question"></select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Your Answer</label>
+      <input class="form-input" type="text" id="sq-answer" placeholder="Answer (case-insensitive)" autocomplete="off"/>
+    </div>
+    <div id="sq-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-security-question')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSecurityQuestion()">Save Question</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <script src="authguard.js"></script>
 
@@ -900,6 +963,9 @@ async function doLogin() {
   localStorage.setItem('access_token', res.token);
   currentUser = res.user;
   localStorage.setItem('current_user', JSON.stringify(res.user));
+  // Store last login info for banner display on profile (#12)
+  localStorage.setItem('last_login', res.last_login || '');
+  localStorage.setItem('last_failed_login', res.last_failed_login || '');
   $('login-err').textContent = '';
   $('login-page').style.display = 'none';
   $('app').classList.add('visible');
@@ -916,6 +982,8 @@ function doLogout() {
   currentUser = null;
   localStorage.removeItem('access_token');
   localStorage.removeItem('current_user');
+  localStorage.removeItem('last_login');
+  localStorage.removeItem('last_failed_login');
   $('app').classList.remove('visible');
   $('login-page').style.display = 'flex';
   $('login-user').value = '';
@@ -1211,6 +1279,11 @@ async function loadLogs() {
 // ── PROFILE ───────────────────────────────────────────────────────────────────
 function loadProfile() {
   const u = currentUser;
+  // Show last login info banner (#12)
+  showLastLoginBanner(
+    localStorage.getItem('last_login') || null,
+    localStorage.getItem('last_failed_login') || null
+  );
   $('profile-content').innerHTML = `
     <div class="profile-card">
       <div class="profile-avatar">${u.full_name.charAt(0).toUpperCase()}</div>
@@ -1278,6 +1351,115 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
     showPage('dashboard');
   }
 })();
+// ── LAST LOGIN BANNER (#12) ────────────────────────────────────────────────────
+function showLastLoginBanner(lastLogin, lastFailed) {
+  const banner = $('last-login-banner');
+  if (!banner) return;
+  if (!lastLogin && !lastFailed) { banner.style.display = 'none'; return; }
+  const fmt = iso => iso ? new Date(iso).toLocaleString() : '—';
+  banner.style.display = 'block';
+  banner.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;gap:24px;flex-wrap:wrap;font-size:12px">
+      <div><span style="color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-size:10px">Last Successful Login</span><br>
+        <span style="color:var(--success)">${fmt(lastLogin)}</span></div>
+      <div><span style="color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-size:10px">Last Failed Attempt</span><br>
+        <span style="color:${lastFailed ? 'var(--warn)' : 'var(--muted)'}">${fmt(lastFailed)}</span></div>
+    </div>`;
+}
+
+// ── SECURITY QUESTION ─────────────────────────────────────────────────────────
+async function openSecurityQuestionModal() {
+  $('sq-error').textContent = '';
+  $('sq-answer').value = '';
+  const res = await api('/api/security-questions');
+  const sel = $('sq-question');
+  sel.innerHTML = (res.questions || []).map(q => `<option value="${q}">${q}</option>`).join('');
+  // Pre-select existing question if set
+  if (currentUser.security_question) {
+    for (const opt of sel.options) {
+      if (opt.value === currentUser.security_question) { opt.selected = true; break; }
+    }
+  }
+  openModal('modal-security-question');
+}
+
+async function saveSecurityQuestion() {
+  const question = $('sq-question').value;
+  const answer   = $('sq-answer').value.trim();
+  $('sq-error').textContent = '';
+  if (!answer) { $('sq-error').textContent = 'Please enter an answer.'; return; }
+  const res = await api('/api/security-question', 'POST', { question, answer });
+  if (res.error) { $('sq-error').textContent = res.error; return; }
+  currentUser.security_question = question;
+  localStorage.setItem('current_user', JSON.stringify(currentUser));
+  toast('✅ Security question saved');
+  closeModal('modal-security-question');
+}
+
+// ── CHANGE PASSWORD ───────────────────────────────────────────────────────────
+async function openChangePasswordModal() {
+  $('cp-current').value = '';
+  $('cp-sec-answer').value = '';
+  $('cp-new').value = '';
+  $('cp-confirm').value = '';
+  $('cp-error').textContent = '';
+  checkPasswordStrength('');
+
+  // Show the user's current security question
+  const q = currentUser.security_question;
+  $('cp-sec-question-label').textContent = q
+    ? `Security Question: ${q}`
+    : 'Security Question (not set — please set one first)';
+
+  if (!q) {
+    toast('⚠️ Please set a security question first.', 'error');
+    openSecurityQuestionModal();
+    return;
+  }
+  openModal('modal-change-password');
+}
+
+function checkPasswordStrength(pw) {
+  const fill  = $('cp-strength-fill');
+  const label = $('cp-strength-label');
+  if (!fill) return;
+  let score = 0;
+  if (pw.length >= 8)                        score++;
+  if (/[A-Z]/.test(pw))                     score++;
+  if (/[a-z]/.test(pw))                     score++;
+  if (/[0-9]/.test(pw))                     score++;
+  if (/[^A-Za-z0-9]/.test(pw))             score++;
+  const pct    = (score / 5) * 100;
+  const colors = ['#ef4444','#f59e0b','#f59e0b','#22c55e','#22c55e'];
+  const labels = ['Very Weak','Weak','Fair','Strong','Very Strong'];
+  fill.style.width      = pct + '%';
+  fill.style.background = pw ? colors[score - 1] || '#ef4444' : 'transparent';
+  label.textContent     = pw ? labels[score - 1] || '' : '';
+}
+
+async function submitChangePassword() {
+  $('cp-error').textContent = '';
+  const current = $('cp-current').value;
+  const answer  = $('cp-sec-answer').value.trim();
+  const newPw   = $('cp-new').value;
+  const confirm = $('cp-confirm').value;
+
+  if (!current)  { $('cp-error').textContent = 'Enter your current password.'; return; }
+  if (!answer)   { $('cp-error').textContent = 'Enter your security answer.'; return; }
+  if (!newPw)    { $('cp-error').textContent = 'Enter a new password.'; return; }
+  if (newPw !== confirm) { $('cp-error').textContent = 'New passwords do not match.'; return; }
+
+  const res = await api('/api/change-password', 'POST', {
+    current_password: current,
+    new_password:     newPw,
+    security_answer:  answer
+  });
+  if (res.error) { $('cp-error').textContent = res.error; return; }
+  toast('✅ Password changed successfully');
+  closeModal('modal-change-password');
+}
+
+
 </script>
 </body>
 </html>

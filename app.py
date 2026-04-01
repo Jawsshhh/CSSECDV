@@ -66,8 +66,14 @@ def seed_defaults():
         ]
         for u in defaults:
             u["created_at"] = datetime.utcnow().isoformat()
+            u["password_changed_at"] = datetime.utcnow().isoformat()
+            u["password_history"] = [u["password"]]   # store initial hash in history
+            u["security_question"] = None
+            u["security_answer_hash"] = None
+            u["last_login"] = None
+            u["last_failed_login"] = None
         users_col.insert_many(defaults)
-        print("✅  Seeded default users.")
+        print("Seeded default users.")
 
 MAX_ATTEMPTS   = 5
 LOCKOUT_MINUTES = 15
@@ -135,27 +141,39 @@ def login():
 
         if not check_pw(data.get("password", ""), user["password"]):
             record_failed_attempt(user)
+            users_col.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"last_failed_login": datetime.utcnow().isoformat()}}
+            )
             attempts_left = MAX_ATTEMPTS - user.get("failed_attempts", 0) - 1
             if attempts_left <= 0:
                 return jsonify({"error": f"Account locked for {LOCKOUT_MINUTES} minutes."}), 423
             return jsonify({"error": f"Invalid credentials. {attempts_left} attempt{'s' if attempts_left != 1 else ''} remaining."}), 401
 
+        prev_last_login        = user.get("last_login")
+        prev_last_failed_login = user.get("last_failed_login")
+
+        now_iso = datetime.utcnow().isoformat()
         users_col.update_one(
             {"_id": user["_id"]},
-            {"$unset": {"failed_attempts": "", "locked_until": ""}}
+            {"$unset": {"failed_attempts": "", "locked_until": ""},
+             "$set":   {"last_login": now_iso}}
         )
         log_action(str(user["_id"]), "LOGIN")
         access_token = create_access_token(identity=str(user["_id"]))
         return jsonify({
             "message": "Login successful",
             "token": access_token,
+            "last_login":        prev_last_login,
+            "last_failed_login": prev_last_failed_login,
             "user": serialize({
                 "_id":        user["_id"],
                 "username":   user["username"],
                 "full_name":  user["full_name"],
                 "role":       user["role"],
                 "department": user["department"],
-                "email":      user.get("email", "")
+                "email":      user.get("email", ""),
+                "security_question": user.get("security_question")
             })
         })
     except Exception as e:
@@ -355,6 +373,146 @@ def summary_report():
 def get_logs():
     logs = list(logs_col.find({}).sort("timestamp", -1).limit(100))
     return jsonify(serialize(logs))
+
+
+
+
+ALLOWED_SECURITY_QUESTIONS = [
+    "What was the name of your first pet?",
+    "What city were you born in?",
+    "What was the make and model of your first car?",
+    "What is your oldest sibling's middle name?",
+    "What was the name of your elementary school?",
+    "What was the street name you grew up on?",
+    "What was your childhood nickname?",
+    "What is the middle name of your youngest child?",
+    "In what city did your parents meet?",
+    "What was the name of your first employer?",
+]
+
+@app.route("/api/security-questions", methods=["GET"])
+def list_security_questions():
+    return jsonify({"questions": ALLOWED_SECURITY_QUESTIONS})
+
+@app.route("/api/security-question", methods=["POST"])
+@jwt_required()
+def set_security_question():
+    try:
+        user_id = get_jwt_identity()
+        data = request.json
+        question = data.get("question", "").strip()
+        answer   = data.get("answer", "").strip().lower()
+
+        if question not in ALLOWED_SECURITY_QUESTIONS:
+            return jsonify({"error": "Invalid security question"}), 400
+        if len(answer) < 3:
+            return jsonify({"error": "Answer is too short"}), 400
+
+        answer_hash = hash_pw(answer)
+        users_col.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"security_question": question, "security_answer_hash": answer_hash}}
+        )
+        log_action(user_id, "SET_SECURITY_QUESTION")
+        return jsonify({"message": "Security question saved"})
+    except Exception as e:
+        return jsonify({"error": "Failed to save security question"}), 500
+
+@app.route("/api/security-question/<user_id>", methods=["GET"])
+@jwt_required()
+def get_security_question(user_id):
+    caller_id = get_jwt_identity()
+    if caller_id != user_id:
+        return jsonify({"error": "Forbidden"}), 403
+    user = users_col.find_one({"_id": ObjectId(user_id)}, {"security_question": 1})
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"security_question": user.get("security_question")})
+
+
+# ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+
+PASSWORD_MIN_AGE_HOURS = 24
+PASSWORD_HISTORY_DEPTH = 5
+
+def _validate_new_password(new_pw: str):
+    if len(new_pw) < 8:
+        return "Password must be at least 8 characters."
+    if not re.search(r'[A-Z]', new_pw):
+        return "Password must contain at least one uppercase letter."
+    if not re.search(r'[a-z]', new_pw):
+        return "Password must contain at least one lowercase letter."
+    if not re.search(r'\d', new_pw):
+        return "Password must contain at least one digit."
+    if not re.search(r'[^A-Za-z0-9]', new_pw):
+        return "Password must contain at least one special character."
+    return None
+
+@app.route("/api/change-password", methods=["POST"])
+@jwt_required()
+def change_password():
+    try:
+        user_id = get_jwt_identity()
+        data    = request.json
+        current_pw = data.get("current_password", "")
+        new_pw     = data.get("new_password", "")
+        sec_answer = data.get("security_answer", "").strip().lower()
+
+        user = users_col.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # #13 Re-authenticate: verify current password
+        if not check_pw(current_pw, user["password"]):
+            log_action(user_id, "CHANGE_PASSWORD_FAIL", "Bad current password")
+            return jsonify({"error": "Current password is incorrect."}), 401
+
+        # #9 Security question verification
+        sec_q_hash = user.get("security_answer_hash")
+        if not sec_q_hash:
+            return jsonify({"error": "Please set a security question before changing your password."}), 400
+        if not check_pw(sec_answer, sec_q_hash):
+            log_action(user_id, "CHANGE_PASSWORD_FAIL", "Bad security answer")
+            return jsonify({"error": "Security answer is incorrect."}), 401
+
+        # #11 Minimum password age
+        changed_at_str = user.get("password_changed_at")
+        if changed_at_str:
+            changed_at = datetime.fromisoformat(changed_at_str)
+            age_hours  = (datetime.utcnow() - changed_at).total_seconds() / 3600
+            if age_hours < PASSWORD_MIN_AGE_HOURS:
+                hours_left = int(PASSWORD_MIN_AGE_HOURS - age_hours) + 1
+                return jsonify({"error": f"Password is too new. Please wait {hours_left} more hour(s) before changing again."}), 400
+
+        # Basic strength validation
+        err = _validate_new_password(new_pw)
+        if err:
+            return jsonify({"error": err}), 400
+
+        # #10 Prevent password re-use
+        history = user.get("password_history", [user["password"]])
+        for old_hash in history[-PASSWORD_HISTORY_DEPTH:]:
+            if check_pw(new_pw, old_hash):
+                return jsonify({"error": f"New password cannot be the same as any of your last {PASSWORD_HISTORY_DEPTH} passwords."}), 400
+
+        new_hash    = hash_pw(new_pw)
+        new_history = (history + [new_hash])[-PASSWORD_HISTORY_DEPTH:]
+        now_iso     = datetime.utcnow().isoformat()
+
+        users_col.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {
+                "password":            new_hash,
+                "password_changed_at": now_iso,
+                "password_history":    new_history,
+            }}
+        )
+        log_action(user_id, "CHANGE_PASSWORD", "Password changed successfully")
+        return jsonify({"message": "Password changed successfully."})
+
+    except Exception as e:
+        log_action("system", "CHANGE_PASSWORD_ERROR", str(e))
+        return jsonify({"error": "An error occurred. Please try again."}), 500
 
 
 # Frontend
