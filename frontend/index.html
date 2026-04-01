@@ -822,10 +822,13 @@ tr:hover td { background: rgba(255,255,255,0.015); }
 </div>
 
 <div id="toast"></div>
+<script src="authguard.js"></script>
 
 <script>
 const API = '';
 let currentUser = null;
+
+
 
 // ── UTILS ────────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -880,6 +883,7 @@ async function doLogin() {
   if (res.error) { $('login-err').textContent = res.error; return; }
   localStorage.setItem('access_token', res.token);
   currentUser = res.user;
+  localStorage.setItem('current_user', JSON.stringify(res.user));
   $('login-err').textContent = '';
   $('login-page').style.display = 'none';
   $('app').classList.add('visible');
@@ -895,6 +899,7 @@ $('login-user').addEventListener('keydown', e => e.key === 'Enter' && $('login-p
 function doLogout() {
   currentUser = null;
   localStorage.removeItem('access_token');
+  localStorage.removeItem('current_user');
   $('app').classList.remove('visible');
   $('login-page').style.display = 'flex';
   $('login-user').value = '';
@@ -939,6 +944,7 @@ function buildSidebar() {
 }
 
 function showPage(name) {
+  if (!AuthGuard.enforce(name)) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   $(`page-${name}`).classList.add('active');
@@ -1244,6 +1250,18 @@ async function savePayslip() {
 document.querySelectorAll('.modal-overlay').forEach(o => {
   o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
 });
+
+(function init() {
+  if (AuthGuard.restoreSession()) {
+    $('login-page').style.display = 'none';
+    $('app').classList.add('visible');
+    $('top-name').textContent = currentUser.full_name;
+    $('top-role').textContent = currentUser.role.toUpperCase();
+    $('top-avatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
+    buildSidebar();
+    showPage('dashboard');
+  }
+})();
 </script>
 </body>
 </html>

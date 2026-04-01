@@ -17,7 +17,6 @@ CORS(app)
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET", "super-secret-fallback-key")
 jwt = JWTManager(app)
 
-# ─── MongoDB CONNECTION ───────────────────────────────────────────────────────
 uri = os.getenv("MONGO_DB_URI")
 #MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(uri, server_api=ServerApi('1'))
@@ -29,7 +28,7 @@ leave_col       = db["leave_requests"]
 payslips_col    = db["payslips"]
 logs_col        = db["system_logs"]
 
-# ─── HELPERS ──────────────────────────────────────────────────────────────────
+# Helper functions
 def hash_pw(pw): # Password Hashing
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(pw.encode('utf-8'), salt)
@@ -68,7 +67,7 @@ def seed_defaults():
         users_col.insert_many(defaults)
         print("✅  Seeded default users.")
 
-# ─── AUTH ─────────────────────────────────────────────────────────────────────
+# Login/Authentication
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
@@ -91,7 +90,7 @@ def login():
 })
 
 
-# ─── USERS ────────────────────────────────────────────────────────────────────
+# User routes
 @app.route("/api/users", methods=["GET"])
 @jwt_required()
 def get_users():
@@ -133,7 +132,7 @@ def delete_user(user_id):
     users_col.delete_one({"_id": ObjectId(user_id)})
     return jsonify({"message": "User deleted"})
 
-# ─── ATTENDANCE ───────────────────────────────────────────────────────────────
+# Attendance routes
 @app.route("/api/attendance/timein", methods=["POST"])
 @jwt_required()
 def time_in():
@@ -185,7 +184,7 @@ def get_all_attendance():
         enriched.append(r)
     return jsonify(serialize(enriched))
 
-# ─── LEAVE REQUESTS ───────────────────────────────────────────────────────────
+# Leave request functionality
 @app.route("/api/leave", methods=["POST"])
 @jwt_required()
 def submit_leave():
@@ -235,7 +234,7 @@ def review_leave(leave_id):
     log_action(data["reviewed_by"], "REVIEW_LEAVE", f"{leave_id}:{data['status']}")
     return jsonify({"message": f"Leave {data['status']}"})
 
-# ─── PAYSLIPS ─────────────────────────────────────────────────────────────────
+# Payslips (may cut)
 @app.route("/api/payslips/<user_id>", methods=["GET"])
 @jwt_required()
 def get_payslips(user_id):
@@ -267,19 +266,19 @@ def summary_report():
         "total_overtime_hours": round(ot_hours, 2)
     })
 
-# ─── SYSTEM LOGS ──────────────────────────────────────────────────────────────
+# Logging
 @app.route("/api/logs", methods=["GET"])
 @jwt_required()
 def get_logs():
     logs = list(logs_col.find({}).sort("timestamp", -1).limit(100))
     return jsonify(serialize(logs))
 
-# ─── SERVE FRONTEND ───────────────────────────────────────────────────────────
+# Frontend
 @app.route("/")
 def index():
     return send_from_directory("frontend", "index.html")
 
-if __name__ == "__main__":
+if __name__ == "__main__": #remove before submission
     seed_defaults()
     print("\n🚀  HR System running → http://localhost:5000")
     print("─────────────────────────────────────────")
@@ -287,4 +286,4 @@ if __name__ == "__main__":
     print("  hr_staff / hr123        → HR Staff")
     print("  john_doe / employee123  → Employee")
     print("─────────────────────────────────────────\n")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000) #change to false before submission
