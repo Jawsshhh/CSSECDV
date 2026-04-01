@@ -6,6 +6,7 @@ from pymongo.server_api import ServerApi
 from bson import ObjectId
 from datetime import datetime, timedelta
 import hashlib
+from functools import wraps
 import os
 from dotenv import load_dotenv
 import bcrypt
@@ -100,60 +101,79 @@ def record_failed_attempt(user):
             {"$set": {"failed_attempts": attempts}}
         )
 
+def require_role(*roles):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                user_id = get_jwt_identity()
+                user = users_col.find_one({"_id": ObjectId(user_id)})
+                if not user or user.get("role") not in roles:
+                    return jsonify({"error": "Forbidden"}), 403
+                return fn(*args, **kwargs)
+            except Exception:
+                # Fail securely — any error defaults to denied
+                return jsonify({"error": "Forbidden"}), 403
+        return wrapper
+    return decorator
 # Login/Authentication
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.json
-    user = users_col.find_one({"username": data.get("username")})
+    try:
+        data = request.json
+        if not data or not data.get("username") or not data.get("password"):
+            return jsonify({"error": "Invalid credentials"}), 401
 
-    if not user:
-        return jsonify({"error": "Invalid credentials"}), 401
+        user = users_col.find_one({"username": data.get("username")})
+        if not user:
+            return jsonify({"error": "Invalid credentials"}), 401
 
-    locked, remaining = is_account_locked(user)
-    if locked:
-        log_action(str(user["_id"]), "LOGIN_BLOCKED", f"{remaining}min remaining")
+        locked, remaining = is_account_locked(user)
+        if locked:
+            log_action(str(user["_id"]), "LOGIN_BLOCKED", f"{remaining}min remaining")
+            return jsonify({"error": f"Account locked. Try again in {remaining} minute{'s' if remaining != 1 else ''}."}), 423
+
+        if not check_pw(data.get("password", ""), user["password"]):
+            record_failed_attempt(user)
+            attempts_left = MAX_ATTEMPTS - user.get("failed_attempts", 0) - 1
+            if attempts_left <= 0:
+                return jsonify({"error": f"Account locked for {LOCKOUT_MINUTES} minutes."}), 423
+            return jsonify({"error": f"Invalid credentials. {attempts_left} attempt{'s' if attempts_left != 1 else ''} remaining."}), 401
+
+        users_col.update_one(
+            {"_id": user["_id"]},
+            {"$unset": {"failed_attempts": "", "locked_until": ""}}
+        )
+        log_action(str(user["_id"]), "LOGIN")
+        access_token = create_access_token(identity=str(user["_id"]))
         return jsonify({
-            "error": f"Account locked. Try again in {remaining} minute{'s' if remaining != 1 else ''}."
-        }), 423  # 423 Locked
-
-
-    if not check_pw(data.get("password", ""), user["password"]):
-        record_failed_attempt(user)
-        attempts_left = MAX_ATTEMPTS - user.get("failed_attempts", 0) - 1
-        if attempts_left <= 0:
-            return jsonify({"error": f"Account locked for {LOCKOUT_MINUTES} minutes due to too many failed attempts."}), 423
-        return jsonify({"error": f"Invalid credentials. {attempts_left} attempt{'s' if attempts_left != 1 else ''} remaining."}), 401
-
-    users_col.update_one(
-        {"_id": user["_id"]},
-        {"$unset": {"failed_attempts": "", "locked_until": ""}}
-    )
-
-    log_action(str(user["_id"]), "LOGIN")
-    access_token = create_access_token(identity=str(user["_id"]))
-    return jsonify({
-    "message": "Login successful",
-    "token": access_token,
-    "user": serialize({
-        "_id": user["_id"],
-        "username": user["username"],
-        "full_name": user["full_name"],
-        "role": user["role"],
-        "department": user["department"],
-        "email": user.get("email", "")
-    })
-})
+            "message": "Login successful",
+            "token": access_token,
+            "user": serialize({
+                "_id":        user["_id"],
+                "username":   user["username"],
+                "full_name":  user["full_name"],
+                "role":       user["role"],
+                "department": user["department"],
+                "email":      user.get("email", "")
+            })
+        })
+    except Exception as e:
+        log_action("system", "LOGIN_ERROR", str(e))
+        return jsonify({"error": "An error occurred. Please try again."}), 500
 
 
 # User routes
 @app.route("/api/users", methods=["GET"])
 @jwt_required()
+@require_role("admin", "hr")
 def get_users():
     users = list(users_col.find({}, {"password": 0}))
     return jsonify(serialize(users))
 
 @app.route("/api/users", methods=["POST"])
 @jwt_required()
+@require_role("admin")
 def create_user():
     data = request.json
     if users_col.find_one({"username": data["username"]}):
@@ -173,6 +193,7 @@ def create_user():
 
 @app.route("/api/users/<user_id>", methods=["PUT"])
 @jwt_required()
+@require_role("admin")
 def update_user(user_id):
     data = request.json
     update = {k: v for k, v in data.items() if k not in ("_id", "password")}
@@ -183,6 +204,7 @@ def update_user(user_id):
 
 @app.route("/api/users/<user_id>", methods=["DELETE"])
 @jwt_required()
+@require_role("admin")
 def delete_user(user_id):
     users_col.delete_one({"_id": ObjectId(user_id)})
     return jsonify({"message": "User deleted"})
@@ -229,6 +251,7 @@ def get_attendance(user_id):
 
 @app.route("/api/attendance/all", methods=["GET"])
 @jwt_required()
+@require_role("admin", "hr")
 def get_all_attendance():
     records = list(attendance_col.find({}).sort("date", -1).limit(100))
     enriched = []
@@ -267,6 +290,7 @@ def get_my_leave(user_id):
 
 @app.route("/api/leave/all", methods=["GET"])
 @jwt_required()
+@require_role("admin", "hr")
 def get_all_leave():
     records = list(leave_col.find({}).sort("created_at", -1))
     enriched = []
@@ -279,6 +303,7 @@ def get_all_leave():
 
 @app.route("/api/leave/<leave_id>/review", methods=["PUT"])
 @jwt_required()
+@require_role("admin", "hr")
 def review_leave(leave_id):
     data = request.json
     leave_col.update_one({"_id": ObjectId(leave_id)}, {"$set": {
@@ -298,6 +323,7 @@ def get_payslips(user_id):
 
 @app.route("/api/payslips", methods=["POST"])
 @jwt_required()
+@require_role("admin")
 def add_payslip():
     data = request.json
     data["created_at"] = datetime.utcnow().isoformat()
@@ -307,6 +333,7 @@ def add_payslip():
 # ─── REPORTS ──────────────────────────────────────────────────────────────────
 @app.route("/api/reports/summary", methods=["GET"])
 @jwt_required()
+@require_role("admin", "hr")
 def summary_report():
     total_users   = users_col.count_documents({})
     pending_leave = leave_col.count_documents({"status": "pending"})
@@ -324,6 +351,7 @@ def summary_report():
 # Logging
 @app.route("/api/logs", methods=["GET"])
 @jwt_required()
+@require_role("admin")
 def get_logs():
     logs = list(logs_col.find({}).sort("timestamp", -1).limit(100))
     return jsonify(serialize(logs))
