@@ -1,11 +1,11 @@
 const AuthGuard = {
   rules: {
-    employee: ['dashboard', 'profile', 'attendance', 'leave', 'payslips'],
-    hr:       ['dashboard', 'profile', 'attendance', 'leave', 'payslips',
+    employee: ['dashboard', 'profile', 'attendance', 'leave'],
+    hr:       ['dashboard', 'profile', 'attendance', 'leave', 
                 'hr-attendance', 'hr-leave', 'hr-reports'],
-    admin:    ['dashboard', 'profile', 'attendance', 'leave', 'payslips',
+    admin:    ['dashboard', 'profile', 'attendance', 'leave',
                 'hr-attendance', 'hr-leave', 'hr-reports',
-                'admin-users', 'admin-payslips', 'admin-logs'],
+                'admin-users', 'admin-logs'],
   },
 
   isAuthenticated() {

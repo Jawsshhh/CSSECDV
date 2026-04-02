@@ -615,18 +615,6 @@ tr:hover td { background: rgba(255,255,255,0.015); }
         </div>
       </div>
 
-      <!-- ── Payslips ── -->
-      <div class="page" id="page-payslips">
-        <div class="page-header">
-          <div><div class="page-title">Payslips</div><div class="page-sub">View your salary records</div></div>
-        </div>
-        <div class="table-wrap">
-          <div class="table-header"><span class="table-title">Payslip Records</span></div>
-          <table><thead><tr><th>Period</th><th>Basic Pay</th><th>OT Pay</th><th>Deductions</th><th>Net Pay</th></tr></thead>
-          <tbody id="payslips-tbody"></tbody></table>
-        </div>
-      </div>
-
       <!-- ── HR: All Attendance ── -->
       <div class="page" id="page-hr-attendance">
         <div class="page-header">
@@ -696,17 +684,6 @@ tr:hover td { background: rgba(255,255,255,0.015); }
         </div>
         <div id="last-login-banner" style="display:none;margin-bottom:16px"></div>
         <div id="profile-content"></div>
-      </div>
-
-      <!-- ── Admin: Payslip Add ── -->
-      <div class="page" id="page-admin-payslips">
-        <div class="page-header">
-          <div><div class="page-title">Payslip Management</div><div class="page-sub">Add payslip records for employees</div></div>
-          <button class="btn btn-primary" onclick="openPayslipModal()">+ Add Payslip</button>
-        </div>
-        <div id="payslip-mgmt-content">
-          <div class="empty"><div class="empty-icon">💰</div>Select an employee to view payslips</div>
-        </div>
       </div>
 
     </div><!-- /content -->
@@ -787,45 +764,6 @@ tr:hover td { background: rgba(255,255,255,0.015); }
     </div>
   </div>
 </div>
-
-<div class="modal-overlay" id="modal-payslip">
-  <div class="modal">
-    <div class="modal-title">💰 Add Payslip</div>
-    <div class="form-row">
-      <label class="form-label">Employee</label>
-      <select class="form-select" id="ps-user"></select>
-    </div>
-    <div class="form-row">
-      <label class="form-label">Period (e.g. 2025-03)</label>
-      <input class="form-input" id="ps-period" placeholder="YYYY-MM"/>
-    </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Basic Pay</label>
-        <input class="form-input" type="number" id="ps-basic" placeholder="0.00"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">OT Pay</label>
-        <input class="form-input" type="number" id="ps-ot" placeholder="0.00"/>
-      </div>
-    </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Deductions</label>
-        <input class="form-input" type="number" id="ps-deduct" placeholder="0.00"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">Net Pay (auto)</label>
-        <input class="form-input" id="ps-net" placeholder="—" readonly/>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('modal-payslip')">Cancel</button>
-      <button class="btn btn-primary" onclick="savePayslip()">Save Payslip</button>
-    </div>
-  </div>
-</div>
-
 
 <!-- ── Change Password Modal ── -->
 <div class="modal-overlay" id="modal-change-password">
@@ -1004,7 +942,6 @@ function buildSidebar() {
     html += `<div class="nav-section"><span class="nav-label">Employee</span>
       <div class="nav-item" onclick="showPage('attendance')"><span class="nav-icon">🕐</span> Attendance</div>
       <div class="nav-item" onclick="showPage('leave')"><span class="nav-icon">📅</span> Leave Requests</div>
-      <div class="nav-item" onclick="showPage('payslips')"><span class="nav-icon">💵</span> My Payslips</div>
     </div>`;
   }
 
@@ -1019,7 +956,6 @@ function buildSidebar() {
   if (role === 'admin') {
     html += `<div class="nav-section"><span class="nav-label">Admin</span>
       <div class="nav-item" onclick="showPage('admin-users')"><span class="nav-icon">👥</span> User Management</div>
-      <div class="nav-item" onclick="showPage('admin-payslips')"><span class="nav-icon">💰</span> Payslips</div>
       <div class="nav-item" onclick="showPage('admin-logs')"><span class="nav-icon">🔍</span> System Logs</div>
     </div>`;
   }
@@ -1039,14 +975,12 @@ function showPage(name) {
     'dashboard':       loadDashboard,
     'attendance':      loadAttendance,
     'leave':           loadLeave,
-    'payslips':        loadPayslips,
     'hr-attendance':   loadHRAttendance,
     'hr-leave':        loadHRLeave,
     'hr-reports':      loadHRReports,
     'admin-users':     loadUsers,
     'admin-logs':      loadLogs,
     'profile':         loadProfile,
-    'admin-payslips':  loadAdminPayslips,
   };
   if (loaders[name]) loaders[name]();
 }
@@ -1148,20 +1082,6 @@ async function submitLeave() {
   toast('✅ Leave request submitted');
   closeModal('modal-leave');
   loadLeave();
-}
-
-// ── PAYSLIPS ──────────────────────────────────────────────────────────────────
-async function loadPayslips() {
-  const records = await api(`/api/payslips/${currentUser._id}`);
-  const tbody = $('payslips-tbody');
-  if (!records.length) { tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">💵</div>No payslips available yet</div></td></tr>`; return; }
-  tbody.innerHTML = records.map(r => `<tr>
-    <td>${r.period}</td>
-    <td>₱${Number(r.basic_pay||0).toLocaleString()}</td>
-    <td>₱${Number(r.ot_pay||0).toLocaleString()}</td>
-    <td>₱${Number(r.deductions||0).toLocaleString()}</td>
-    <td><strong>₱${Number(r.net_pay||0).toLocaleString()}</strong></td>
-  </tr>`).join('');
 }
 
 // ── HR: ATTENDANCE ────────────────────────────────────────────────────────────
@@ -1303,54 +1223,7 @@ function loadProfile() {
   `;
 }
 
-// ── ADMIN: PAYSLIPS ───────────────────────────────────────────────────────────
-async function loadAdminPayslips() {
-  // Populates user dropdown in payslip modal
-  const users = await api('/api/users');
-  const employees = users.filter(u => u.role === 'employee');
-  $('ps-user').innerHTML = employees.map(u => `<option value="${u._id}">${u.full_name}</option>`).join('');
-}
-function openPayslipModal() {
-  // Compute net pay
-  ['ps-basic','ps-ot','ps-deduct'].forEach(id => {
-    $(id).addEventListener('input', () => {
-      const net = (parseFloat($('ps-basic').value)||0) + (parseFloat($('ps-ot').value)||0) - (parseFloat($('ps-deduct').value)||0);
-      $('ps-net').value = net.toFixed(2);
-    });
-  });
-  openModal('modal-payslip');
-}
-async function savePayslip() {
-  const net = (parseFloat($('ps-basic').value)||0) + (parseFloat($('ps-ot').value)||0) - (parseFloat($('ps-deduct').value)||0);
-  const res = await api('/api/payslips', 'POST', {
-    user_id:    $('ps-user').value,
-    period:     $('ps-period').value,
-    basic_pay:  parseFloat($('ps-basic').value)||0,
-    ot_pay:     parseFloat($('ps-ot').value)||0,
-    deductions: parseFloat($('ps-deduct').value)||0,
-    net_pay:    net
-  });
-  if (res.error) { toast(res.error, 'error'); return; }
-  toast('✅ Payslip saved');
-  closeModal('modal-payslip');
-}
 
-// Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
-});
-
-(function init() {
-  if (AuthGuard.restoreSession()) {
-    $('login-page').style.display = 'none';
-    $('app').classList.add('visible');
-    $('top-name').textContent = currentUser.full_name;
-    $('top-role').textContent = currentUser.role.toUpperCase();
-    $('top-avatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
-    buildSidebar();
-    showPage('dashboard');
-  }
-})();
 // ── LAST LOGIN BANNER (#12) ────────────────────────────────────────────────────
 function showLastLoginBanner(lastLogin, lastFailed) {
   const banner = $('last-login-banner');
@@ -1462,7 +1335,7 @@ async function submitChangePassword() {
     security_answer:  answer
   });
   if (res.error) { $('cp-error').textContent = res.error; return; }
-  toast('✅ Password changed successfully');
+  toast('Password changed successfully');
   closeModal('modal-change-password');
 }
 

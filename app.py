@@ -27,7 +27,6 @@ db = client["hr_logging_system"]
 users_col       = db["users"]
 attendance_col  = db["attendance"]
 leave_col       = db["leave_requests"]
-payslips_col    = db["payslips"]
 logs_col        = db["system_logs"]
 
 # Helper functions
@@ -339,21 +338,6 @@ def review_leave(leave_id):
     log_action(data["reviewed_by"], "REVIEW_LEAVE", f"{leave_id}:{data['status']}")
     return jsonify({"message": f"Leave {data['status']}"})
 
-# Payslips (may cut)
-@app.route("/api/payslips/<user_id>", methods=["GET"])
-@jwt_required()
-def get_payslips(user_id):
-    records = list(payslips_col.find({"user_id": user_id}).sort("period", -1))
-    return jsonify(serialize(records))
-
-@app.route("/api/payslips", methods=["POST"])
-@jwt_required()
-@require_role("admin")
-def add_payslip():
-    data = request.json
-    data["created_at"] = datetime.utcnow().isoformat()
-    result = payslips_col.insert_one(data)
-    return jsonify({"message": "Payslip added", "id": str(result.inserted_id)}), 201
 
 # ─── REPORTS ──────────────────────────────────────────────────────────────────
 @app.route("/api/reports/summary", methods=["GET"])
