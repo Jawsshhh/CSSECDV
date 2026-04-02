@@ -237,36 +237,78 @@ def delete_user(user_id):
 @app.route("/api/attendance/timein", methods=["POST"])
 @jwt_required()
 def time_in():
-    data = request.json
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    existing = attendance_col.find_one({"user_id": data["user_id"], "date": today})
-    if existing and existing.get("time_in"):
-        return jsonify({"error": "Already timed in today"}), 400
-    now = datetime.utcnow().isoformat()
-    if existing:
-        attendance_col.update_one({"_id": existing["_id"]}, {"$set": {"time_in": now}})
-    else:
-        attendance_col.insert_one({"user_id": data["user_id"], "date": today, "time_in": now, "time_out": None, "overtime_hours": 0, "notes": ""})
-    log_action(data["user_id"], "TIME_IN")
-    return jsonify({"message": "Timed in", "time": now})
+    try:
+        user_id = get_jwt_identity()
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        existing = attendance_col.find_one({
+            "user_id": user_id,
+            "date": today
+        })
+        if existing and existing.get("time_in"):
+            return jsonify({"error": "Already timed in today"}), 400
+        if existing and existing.get("time_out"):
+            return jsonify({"error": "Attendance already completed today"}), 400
+        now = datetime.utcnow().isoformat()
+        if existing:
+            attendance_col.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {"time_in": now}}
+            )
+        else:
+            attendance_col.insert_one({
+                "user_id": user_id,
+                "date": today,
+                "time_in": now,
+                "time_out": None,
+                "overtime_hours": 0,
+                "notes": ""
+            })
+        log_action(user_id, "TIME_IN")
+        return jsonify({
+            "message": "Timed in",
+            "time": now
+        })
+    except Exception as e:
+        log_action("system", "TIME_IN_ERROR", str(e))
+        return jsonify({"error": "Failed to time in"}), 500
 
 @app.route("/api/attendance/timeout", methods=["POST"])
 @jwt_required()
 def time_out():
-    data = request.json
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    record = attendance_col.find_one({"user_id": data["user_id"], "date": today})
-    if not record or not record.get("time_in"):
-        return jsonify({"error": "No time-in found for today"}), 400
-    if record.get("time_out"):
-        return jsonify({"error": "Already timed out today"}), 400
-    now = datetime.utcnow()
-    hours = (now - datetime.fromisoformat(record["time_in"])).total_seconds() / 3600
-    overtime = max(0, hours - 8)
-    attendance_col.update_one({"_id": record["_id"]}, {"$set": {"time_out": now.isoformat(), "overtime_hours": round(overtime, 2)}})
-    log_action(data["user_id"], "TIME_OUT")
-    return jsonify({"message": "Timed out", "time": now.isoformat(), "hours_worked": round(hours, 2), "overtime": round(overtime, 2)})
-
+    try:
+        user_id = get_jwt_identity()
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        record = attendance_col.find_one({
+            "user_id": user_id,
+            "date": today
+        })
+        if not record or not record.get("time_in"):
+            return jsonify({"error": "No time-in found for today"}), 400
+        if record.get("time_out"):
+            return jsonify({"error": "Already timed out today"}), 400
+        now = datetime.utcnow()
+        time_in_dt = datetime.fromisoformat(record["time_in"])
+        hours = (now - time_in_dt).total_seconds() / 3600
+        if hours < 0:
+            return jsonify({"error": "Invalid time calculation"}), 400
+        overtime = max(0, hours - 8)
+        attendance_col.update_one(
+            {"_id": record["_id"]},
+            {"$set": {
+                "time_out": now.isoformat(),
+                "overtime_hours": round(overtime, 2)
+            }}
+        )
+        log_action(user_id, "TIME_OUT")
+        return jsonify({
+            "message": "Timed out",
+            "time": now.isoformat(),
+            "hours_worked": round(hours, 2),
+            "overtime": round(overtime, 2)
+        })
+    except Exception as e:
+        log_action("system", "TIME_OUT_ERROR", str(e))
+        return jsonify({"error": "Failed to time out"}), 500
 @app.route("/api/attendance/<user_id>", methods=["GET"])
 @jwt_required()
 def get_attendance(user_id):
@@ -290,25 +332,44 @@ def get_all_attendance():
 @app.route("/api/leave", methods=["POST"])
 @jwt_required()
 def submit_leave():
-    data = request.json
-    leave = {
-        "user_id":    data["user_id"],
-        "leave_type": data["leave_type"],
-        "start_date": data["start_date"],
-        "end_date":   data["end_date"],
-        "reason":     data.get("reason", ""),
-        "status":     "pending",
-        "reviewed_by": None,
-        "reviewed_at": None,
-        "created_at": datetime.utcnow().isoformat()
-    }
-    result = leave_col.insert_one(leave)
-    log_action(data["user_id"], "SUBMIT_LEAVE", data["leave_type"])
-    return jsonify({"message": "Leave request submitted", "id": str(result.inserted_id)}), 201
+    try:
+        user_id = get_jwt_identity()
+        data = request.json
+        if not data.get("leave_type") or not data.get("start_date") or not data.get("end_date"):
+            return jsonify({"error": "Missing required fields"}), 400
+        if data["end_date"] < data["start_date"]:
+            return jsonify({"error": "End date cannot be before start date"}), 400
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        if data["start_date"] < today:
+            return jsonify({"error": "Cannot file leave in the past"}), 400
+        leave = {
+            "user_id": user_id,  
+            "leave_type": data["leave_type"],
+            "start_date": data["start_date"],
+            "end_date": data["end_date"],
+            "reason": data.get("reason", ""),
+            "status": "pending",
+            "reviewed_by": None,
+            "reviewed_at": None,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        result = leave_col.insert_one(leave)
+        log_action(user_id, "SUBMIT_LEAVE", data["leave_type"])
+        return jsonify({
+            "message": "Leave request submitted",
+            "id": str(result.inserted_id)
+        }), 201
+    except Exception as e:
+        log_action("system", "SUBMIT_LEAVE_ERROR", str(e))
+        return jsonify({"error": "Failed to submit leave"}), 500
 
 @app.route("/api/leave/<user_id>", methods=["GET"])
 @jwt_required()
 def get_my_leave(user_id):
+    current_user_id = get_jwt_identity()
+    user = users_col.find_one({"_id": ObjectId(current_user_id)})
+    if user["role"] == "employee" and current_user_id != user_id:
+        return jsonify({"error": "Forbidden"}), 403
     records = list(leave_col.find({"user_id": user_id}).sort("created_at", -1))
     return jsonify(serialize(records))
 
@@ -329,14 +390,29 @@ def get_all_leave():
 @jwt_required()
 @require_role("admin", "hr")
 def review_leave(leave_id):
-    data = request.json
-    leave_col.update_one({"_id": ObjectId(leave_id)}, {"$set": {
-        "status": data["status"],
-        "reviewed_by": data["reviewed_by"],
-        "reviewed_at": datetime.utcnow().isoformat()
-    }})
-    log_action(data["reviewed_by"], "REVIEW_LEAVE", f"{leave_id}:{data['status']}")
-    return jsonify({"message": f"Leave {data['status']}"})
+    try:
+        reviewer_id = get_jwt_identity()
+        data = request.json
+        leave = leave_col.find_one({"_id": ObjectId(leave_id)})
+        if not leave:
+            return jsonify({"error": "Leave not found"}), 404
+        if leave["status"] != "pending":
+            return jsonify({"error": "Leave already reviewed"}), 400
+        if data.get("status") not in ["approved", "rejected"]:
+            return jsonify({"error": "Invalid status"}), 400
+        leave_col.update_one(
+            {"_id": ObjectId(leave_id)},
+            {"$set": {
+                "status": data["status"],
+                "reviewed_by": reviewer_id, 
+                "reviewed_at": datetime.utcnow().isoformat()
+            }}
+        )
+        log_action(reviewer_id, "REVIEW_LEAVE", f"{leave_id}:{data['status']}")
+        return jsonify({"message": f"Leave {data['status']}"})
+    except Exception as e:
+        log_action("system", "REVIEW_LEAVE_ERROR", str(e))
+        return jsonify({"error": "Failed to review leave"}), 500
 
 
 # ─── REPORTS ──────────────────────────────────────────────────────────────────
