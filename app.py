@@ -28,6 +28,7 @@ users_col       = db["users"]
 attendance_col  = db["attendance"]
 leave_col       = db["leave_requests"]
 logs_col        = db["system_logs"]
+VALID_ROLES = {"admin", "hr", "employee"}
 
 # Helper functions
 def hash_pw(pw): # Password Hashing
@@ -193,6 +194,15 @@ def get_users():
 @require_role("admin")
 def create_user():
     data = request.json
+    if not data.get("full_name", "").strip():
+        return jsonify({"error": "Full name is required."}), 400
+    if not data.get("username", "").strip():
+        return jsonify({"error": "Username is required."}), 400
+    if data.get("role") not in VALID_ROLES:
+        return jsonify({"error": "Invalid role. Must be admin, hr, or employee."}), 400
+    err = _validate_new_password(data.get("password", ""))
+    if err:
+        return jsonify({"error": err}), 400
     if users_col.find_one({"username": data["username"]}):
         return jsonify({"error": "Username already exists"}), 400
     hashed_pw = hash_pw(data["password"])
@@ -230,7 +240,15 @@ def update_user(user_id):
 @jwt_required()
 @require_role("admin")
 def delete_user(user_id):
+    caller_id = get_jwt_identity()
+    if user_id == caller_id:
+        return jsonify({"error": "You cannot delete your own account."}), 403
+    target = users_col.find_one({"_id": ObjectId(user_id)})
+    if target and target.get("role") == "admin":
+        if users_col.count_documents({"role": "admin"}) <= 1:
+            return jsonify({"error": "Cannot delete the last admin account."}), 403
     users_col.delete_one({"_id": ObjectId(user_id)})
+    log_action(caller_id, "DELETE_USER", str(user_id))
     return jsonify({"message": "User deleted"})
 
 # Attendance routes
@@ -312,6 +330,10 @@ def time_out():
 @app.route("/api/attendance/<user_id>", methods=["GET"])
 @jwt_required()
 def get_attendance(user_id):
+    caller_id = get_jwt_identity()
+    caller = users_col.find_one({"_id": ObjectId(caller_id)})
+    if caller_id != user_id and caller.get("role") not in ("admin", "hr"):
+        return jsonify({"error": "Forbidden"}), 403
     records = list(attendance_col.find({"user_id": user_id}).sort("date", -1).limit(30))
     return jsonify(serialize(records))
 

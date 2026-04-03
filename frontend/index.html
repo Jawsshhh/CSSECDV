@@ -1285,15 +1285,17 @@ async function openChangePasswordModal() {
     : 'Security Question (not set — please set one first)';
 
   if (!q) {
-    $('cp-sec-question-label').textContent = 'Security Question (Not set - leave blank)';
-    $('cp-sec-answer').disabled = true;
-    $('cp-sec-answer').placeholder = 'N/A';
-  } else {
-    $('cp-sec-question-label').textContent = `Security Question: ${q}`;
-    $('cp-sec-answer').disabled = false;
-    $('cp-sec-answer').placeholder = 'Your answer';
-  }
-  openModal('modal-change-password');
+    toast('Please set a security question before changing your password.', 'error');
+    setTimeout(() => {
+        closeModal('modal-change-password');
+        openSecurityQuestionModal();
+    }, 1000);
+    return;
+}
+$('cp-sec-question-label').textContent = `Security Question: ${q}`;
+$('cp-sec-answer').disabled = false;
+$('cp-sec-answer').placeholder = 'Your answer';
+openModal('modal-change-password');
 }
 
 function checkPasswordStrength(pw) {
