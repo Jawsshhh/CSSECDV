@@ -143,14 +143,25 @@ def require_role(*roles):
                 user_id = get_jwt_identity()
                 user = users_col.find_one({"_id": ObjectId(user_id)})
                 if not user or user.get("role") not in roles:
-                    return jsonify({"error": "Forbidden"}), 403
+                    return handle_403_error(None)
                 return fn(*args, **kwargs)
             except Exception:
                 # Fail securely — any error defaults to denied
                 log_action(user_id, "ACCESS_DENIED", f"Unauthorized access attempt to {request.path}")
-                return jsonify({"error": "Forbidden"}), 403
+                return handle_403_error(None)
         return wrapper
     return decorator
+
+# Error
+@app.errorhandler(401)
+def handle_401_error(error):
+    return render_template("error.html", error_message="Unauthorized access. Please log in."), 401
+
+# Error Handler for 403 Forbidden (Missing Authorization/Role)
+@app.errorhandler(403)
+def handle_403_error(error):
+    return render_template("error.html", error_message="Forbidden access. You do not have permission to access this page."), 403
+
 # Login/Authentication
 @app.route("/api/login", methods=["POST"])
 def login():
@@ -647,8 +658,6 @@ def summary_report():
 def get_logs():
     logs = list(logs_col.find({}).sort("timestamp", -1).limit(100))
     return jsonify(serialize(logs))
-
-
 
 
 ALLOWED_SECURITY_QUESTIONS = [

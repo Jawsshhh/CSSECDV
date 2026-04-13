@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>403 - Forbidden</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link href="index.css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <!-- Error Page -->
+    <div id="error-page" class="error-page">
+      <div class="error-card">
+        <div class="error-logo">
+          <div class="error-logo-icon">❌</div>
+          <div>
+            <h1>Access Denied</h1>
+            <span>You do not have permission to access this page.</span>
+          </div>
+        </div>
+
+        <div class="error-details">
+          <p>It seems like you're trying to access a page that you don't have permission to view.</p>
+          <p>This could be because:</p>
+          <ul>
+            <li>You are not logged in.</li>
+            <li>You do not have the required permissions.</li>
+            <li>The page you are looking for does not exist.</li>
+          </ul>
+          <p>Please check your credentials or navigate back to the <a href="dashboard.html">Dashboard</a>.</p>
+        </div>
+        
+        <div class="error-actions">
+          <button class="btn btn-ghost" onclick="window.history.back();">
+            Go Back
+          </button>
+          <button class="btn btn-primary" onclick="window.location.href='dashboard.html';">
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    </script>
+  </body>
+</html>
