@@ -1123,8 +1123,36 @@ async function loadHRAttendance() {
 async function loadHRLeave() {
   const records = await api('/api/leave/all');
   const tbody = $('hr-leave-tbody');
-  if (!records.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📅</div>No leave requests</div></td></tr>`; return; }
-  tbody.innerHTML = records.map(r => `<tr>
+  
+  if (!records.length) { 
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📅</div>No leave requests</div></td></tr>`; 
+    return; 
+  }
+
+  // Filter records based on the same rules used in the backend
+  const viewableRecords = records.filter(r => {
+    const isOwnLeave = r.user_id === currentUser._id;
+    
+    if (currentUser.role === 'admin') {
+      // Admins see everything EXCEPT their own leave (since they can't approve it)
+      return !isOwnLeave;
+    }
+    
+    if (currentUser.role === 'hr') {
+      // HR only sees leaves from users who are 'employees'
+      // Note: This assumes r.role is available or you check the leave_owner_role logic
+      return r.role === 'employee' && !isOwnLeave;
+    }
+    
+    return false;
+  });
+
+  if (!viewableRecords.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔒</div>No leaves available for your review</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = viewableRecords.map(r => `<tr>
     <td>${r.full_name||r.user_id}</td>
     <td>${r.department||'—'}</td>
     <td>${r.leave_type}</td>

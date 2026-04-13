@@ -417,10 +417,12 @@ def get_my_leave(user_id):
 def get_all_leave():
     records = list(leave_col.find({}).sort("created_at", -1))
     enriched = []
+    # In app.py -> get_all_leave()
     for r in records:
-        user = users_col.find_one({"_id": ObjectId(r["user_id"])}, {"full_name": 1, "department": 1}) if ObjectId.is_valid(r.get("user_id", "")) else None
+        user = users_col.find_one({"_id": ObjectId(r["user_id"])}, {"full_name": 1, "department": 1, "role": 1}) # Add "role": 1 here
         r["full_name"] = user["full_name"] if user else r["user_id"]
         r["department"] = user.get("department", "") if user else ""
+        r["role"] = user.get("role", "") if user else "" # Add this line
         enriched.append(r)
     return jsonify(serialize(enriched))
 
