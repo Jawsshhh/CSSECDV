@@ -29,6 +29,7 @@ attendance_col  = db["attendance"]
 leave_col       = db["leave_requests"]
 logs_col        = db["system_logs"]
 VALID_ROLES = {"admin", "hr", "employee"}
+VALID_DEPARTMENTS = {"Engineering", "Marketing", "Development", "HR", "IT", "Finance", "Operations", "Research"}
 
 # Helper functions
 def now_pht():
@@ -209,6 +210,10 @@ def create_user():
         return jsonify({"error": err}), 400
     if users_col.find_one({"username": data["username"]}):
         return jsonify({"error": "Username already exists"}), 400
+    # Inside create_user function
+    dept = data.get("department", "Engineering").strip()
+    if dept not in VALID_DEPARTMENTS:
+        return jsonify({"error": f"Invalid department. Must be one of: {', '.join(VALID_DEPARTMENTS)}"}), 400
     hashed_pw = hash_pw(data["password"])
     user = {
         "username":   data["username"],
@@ -259,6 +264,10 @@ def update_user(user_id):
         if "username" in update and update["username"] != target["username"]:
             if users_col.find_one({"username": update["username"]}):
                 return jsonify({"error": "Username already taken."}), 400
+            
+        if "department" in update:
+            if update["department"] not in VALID_DEPARTMENTS:
+                return jsonify({"error": "Invalid department selection."}), 400    
  
         # Password change requires admin reauth
         if "new_password" in data:
