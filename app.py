@@ -228,27 +228,35 @@ def create_user():
     data = request.json
 
     if not data.get("full_name", "").strip() or not _validate_name(data["full_name"]):
+        log_action("system", "USER_CREATION_FAIL", f"Invalid full name: {data.get('full_name')}")
         return jsonify({"error": "Full name is required."}), 400 
 
     if not data.get("username", "").strip() or not _validate_username(data["username"]):
+        log_action("system", "USER_CREATION_FAIL", f"Invalid username: {data.get('username')}")
         return jsonify({"error": "Valid username is required."}), 400 
     if users_col.find_one({"username": data["username"]}):
+        log_action("system", "USER_CREATION_FAIL", f"Username already exists: {data.get('username')}")
         return jsonify({"error": "Username already exists"}), 400
 
     if not data.get("email", "").strip() or not _validate_email(data["email"]):
+        log_action("system", "USER_CREATION_FAIL", f"Invalid email: {data.get('email')}")
         return jsonify({"error": "Valid email is required."}), 400
     if users_col.find_one({"email": data["email"]}):
+        log_action("system", "USER_CREATION_FAIL", f"Email already in use: {data.get('email')}")
         return jsonify({"error": "Email already in use."}), 400
 
     err = _validate_new_password(data.get("password", ""))
     if err:
+        log_action("system", "USER_CREATION_FAIL", f"Invalid password: {data.get('password')}")
         return jsonify({"error": err}), 400
 
     if data.get("role") not in VALID_ROLES:
+        log_action("system", "USER_CREATION_FAIL", f"Invalid role: {data.get('role')}")
         return jsonify({"error": "Invalid role. Must be Admin, HR, or Employee."}), 400
    
     dept = data.get("department", "Engineering").strip()
     if dept not in VALID_DEPARTMENTS:
+        log_action("system", "USER_CREATION_FAIL", f"Invalid department: {dept}")
         return jsonify({"error": f"Invalid department. Must be one of: {', '.join(VALID_DEPARTMENTS)}"}), 400
     
     hashed_pw = hash_pw(data["password"])
@@ -270,6 +278,7 @@ def create_user():
 
     result = users_col.insert_one(user)
     log_action(data.get("admin_id", "system"), "CREATE_USER", data["username"])
+    log_action("system", "USER_CREATION_SUCCESS", f"User created successfully: {data['username']}")
     return jsonify({"message": "User created", "id": str(result.inserted_id)}), 201
 
 @app.route("/api/users/<user_id>", methods=["PUT"])
@@ -285,6 +294,7 @@ def update_user(user_id):
  
         target = users_col.find_one({"_id": ObjectId(user_id)})
         if not target:
+            log_action(caller_id, "USER_UPDATE_FAIL", f"User not found: {user_id}")
             return jsonify({"error": "User not found"}), 404
         
         # Build safe update — strip internal/auth fields
@@ -295,19 +305,29 @@ def update_user(user_id):
  
         # Validate role if being changed
         if "role" in update and update["role"] not in VALID_ROLES:
+            log_action(caller_id, "USER_UPDATE_FAIL", f"Invalid role for user {user_id}: {data.get('role')}")
             return jsonify({"error": "Invalid role."}), 400
  
         # Validate username uniqueness if being changed
         if "username" in update and update["username"] != target["username"]:
+            if not _validate_username(update["username"]):
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid username: {data.get('username')}")
+                return jsonify({"error": "Valid username is required."}), 400 
             if users_col.find_one({"username": update["username"]}):
+                log_action(caller_id, "USER_UPDATE_FAIL", f"Username already taken: {data.get('username')}")
                 return jsonify({"error": "Username already taken."}), 400
         
         if "email" in update and update["email"] != target.get("email"):
+            if not _validate_email(update["email"]):
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid email: {data.get('email')}")
+                return jsonify({"error": "Valid email is required."}), 400
             if users_col.find_one({"email": update["email"]}):
+                log_action("system", "USER_UPDATE_FAIL", f"Email already in use: {data.get('email')}")
                 return jsonify({"error": "Email already in use."}), 400
 
         if "department" in update:
             if update["department"] not in VALID_DEPARTMENTS:
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid department: {dept}")
                 return jsonify({"error": "Invalid department selection."}), 400    
  
         # Password change requires admin reauth
@@ -315,11 +335,12 @@ def update_user(user_id):
             admin_password = data.get("admin_password", "")
             caller = users_col.find_one({"_id": ObjectId(caller_id)})
             if not caller or not check_pw(admin_password, caller["password"]):
-                log_action(caller_id, "UPDATE_USER_FAIL", f"Bad reauth for password change on {user_id}")
+                log_action(caller_id, "USER_UPDATE_FAIL", f"Bad reauth for password change on {user_id}")
                 return jsonify({"error": "Incorrect admin password. Re-authentication failed."}), 401
  
             err = _validate_new_password(data["new_password"])
             if err:
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid password: {data.get('password')}")
                 return jsonify({"error": err}), 400
  
             new_hash = hash_pw(data["new_password"])
@@ -330,8 +351,8 @@ def update_user(user_id):
             log_action(caller_id, "ADMIN_RESET_PASSWORD", f"target={user_id}")
  
         users_col.update_one({"_id": ObjectId(user_id)}, {"$set": update})
-        log_action(caller_id, "UPDATE_USER", f"target={user_id} fields={list(update.keys())}")
-        
+        log_action(caller_id, "UPDATE_USER_SUCCESS", f"target={user_id} fields={list(update.keys())}")
+
         return jsonify({"message": "User updated"})
     except Exception as e:
         log_action("system", "UPDATE_USER_ERROR", str(e))
@@ -354,19 +375,22 @@ def delete_user(user_id):
 
         # 2. Prevent self-deletion
         if user_id == caller_id:
+            log_action(caller_id, "DELETE_USER_FAIL", f"Invalid user: {target.get('username')} ({user_id})")
             return jsonify({"error": "Security violation: You cannot delete your own account."}), 403
             
         # 3. Prevent deleting the last admin
         target = users_col.find_one({"_id": ObjectId(user_id)})
         if not target:
+            log_action(caller_id, "DELETE_USER_FAIL", f"Invalid user: {target.get('username')} ({user_id})")
             return jsonify({"error": "User not found"}), 404
             
         if target.get("role") == "admin":
             if users_col.count_documents({"role": "admin"}) <= 1:
+                log_action(caller_id, "DELETE_USER_FAIL", f"Invalid user: {target.get('username')} ({user_id})")
                 return jsonify({"error": "Cannot delete the last remaining admin."}), 403
 
         users_col.delete_one({"_id": ObjectId(user_id)})
-        log_action(caller_id, "DELETE_USER", f"Target: {target.get('username')} ({user_id})")
+        log_action(caller_id, "DELETE_USER_SUCCESS", f"Target: {target.get('username')} ({user_id})")
         return jsonify({"message": f"User {target.get('username')} deleted successfully."})
         
     except Exception as e:
