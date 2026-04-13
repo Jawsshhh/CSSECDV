@@ -822,6 +822,23 @@ tr:hover td { background: rgba(255,255,255,0.015); }
   </div>
 </div>
 
+<!-- ── Reauth Modal ── -->
+<div class="modal-overlay" id="modal-reauth">
+  <div class="modal">
+    <div class="modal-title">🔒 Confirm Action</div>
+    <p id="reauth-message" style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.6"></p>
+    <div class="form-row">
+      <label class="form-label">Your Password</label>
+      <input class="form-input" type="password" id="reauth-password-input" placeholder="Enter your password"/>
+    </div>
+    <div id="reauth-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeReauthModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitReauth()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <script src="authguard.js"></script>
 
@@ -866,7 +883,7 @@ async function api(path, method = 'GET', body = null) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
-  if (r.status === 401 && path !== '/api/login') {
+  if (r.status === 401 && path !== '/api/login' && !path.includes('/review')) {
       doLogout();
       toast("Session expired. Please log in again.", "error");
       return { error: "Unauthorized" };
@@ -1122,10 +1139,30 @@ async function loadHRLeave() {
     </td>
   </tr>`).join('');
 }
-async function reviewLeave(id, status) {
-  const res = await api(`/api/leave/${id}/review`, 'PUT', {status, reviewed_by: currentUser._id});
-  toast(res.error ? res.error : `✅ Leave ${status}`);
-  loadHRLeave();
+function reviewLeave(id, status) {
+    promptReauth(
+        `Enter your password to ${status} this leave request.`,
+        async (password) => {
+            try {
+                const res = await api(`/api/leave/${id}/review`, 'PUT', {
+                    status,
+                    reviewed_by: currentUser._id,
+                    reauth_password: password
+                });
+                console.log('review response:', res);
+
+                if (res.error) {
+                    toast(`❌ ${res.error}`, 'error');
+                    return;
+                }
+                toast(`✅ Leave ${status}`);
+                loadHRLeave();
+            } catch (err) {
+                toast('❌ An error occurred.', 'error');
+            }
+        }
+        
+    );
 }
 
 // ── HR: REPORTS ───────────────────────────────────────────────────────────────
@@ -1341,6 +1378,32 @@ async function submitChangePassword() {
   closeModal('modal-change-password');
 }
 
+// ── REAUTH ────────────────────────────────────────────────────────────────────
+let pendingReauthCallback = null;
+
+function promptReauth(message, callback) {
+  pendingReauthCallback = callback;
+  $('reauth-message').textContent = message;
+  $('reauth-password-input').value = '';
+  $('reauth-error').textContent = '';
+  openModal('modal-reauth');
+}
+
+function closeReauthModal() {
+  pendingReauthCallback = null;
+  closeModal('modal-reauth');
+}
+
+function submitReauth() {
+  const password = $('reauth-password-input').value;
+  if (!password) {
+    $('reauth-error').textContent = 'Please enter your password.';
+    return;
+  }
+  const callback = pendingReauthCallback; // save it first
+  closeReauthModal();                     // now safe to close (resets pendingReauthCallback)
+  if (callback) callback(password);       // use the saved reference
+}
 
 </script>
 </body>

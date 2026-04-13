@@ -63,6 +63,7 @@ def seed_defaults():
     if users_col.count_documents({}) == 0:
         defaults = [
             {"username": "admin",     "password": hash_pw("admin123"),     "full_name": "System Admin",  "role": "admin",    "department": "IT",          "email": "admin@company.com"},
+            {"username": "admin2",     "password": hash_pw("admin123"),     "full_name": "System Admin 2",  "role": "admin",    "department": "IT",          "email": "admin2@company.com"},            
             {"username": "hr_staff",  "password": hash_pw("hr123"),        "full_name": "HR Manager",    "role": "hr",       "department": "HR",          "email": "hr@company.com"},
             {"username": "john_doe",  "password": hash_pw("employee123"),  "full_name": "John Doe",      "role": "employee", "department": "Engineering", "email": "john@company.com"},
             {"username": "jane_doe",  "password": hash_pw("employee123"),  "full_name": "Jane Doe",      "role": "employee", "department": "Marketing",   "email": "jane@company.com"},
@@ -425,11 +426,22 @@ def get_all_leave():
 
 @app.route("/api/leave/<leave_id>/review", methods=["PUT"])
 @jwt_required()
-@require_role("admin", "hr")
+@require_role("admin", "hr")  # both can access, but with restrictions
 def review_leave(leave_id):
     try:
         reviewer_id = get_jwt_identity()
+        reviewer = users_col.find_one({"_id": ObjectId(reviewer_id)})
+        reviewer_role = reviewer.get("role")
         data = request.json
+
+        # Reauthorization check
+        reauth_password = data.get("reauth_password", "")
+        if not reauth_password:
+            return jsonify({"error": "Reauthorization required."}), 401
+        if not check_pw(reauth_password, reviewer["password"]):
+            log_action(reviewer_id, "REAUTH_FAILED", f"Failed reauth on leave review {leave_id}")
+            return jsonify({"error": "Incorrect password. Action denied."}), 401
+
         leave = leave_col.find_one({"_id": ObjectId(leave_id)})
         if not leave:
             return jsonify({"error": "Leave not found"}), 404
@@ -437,11 +449,31 @@ def review_leave(leave_id):
             return jsonify({"error": "Leave already reviewed"}), 400
         if data.get("status") not in ["approved", "rejected"]:
             return jsonify({"error": "Invalid status"}), 400
+
+        # Get the leave owner's role
+        leave_owner = users_col.find_one({"_id": ObjectId(leave["user_id"])})
+        leave_owner_role = leave_owner.get("role") if leave_owner else None
+
+        # Rule: Admin cannot review their own leave
+        if leave["user_id"] == reviewer_id:
+            log_action(reviewer_id, "ACCESS_DENIED", f"Tried to review own leave {leave_id}")
+            return jsonify({"error": "You cannot approve or reject your own leave."}), 403
+
+        # Rule: HR can only review employee leaves
+        if reviewer_role == "hr" and leave_owner_role != "employee":
+            log_action(reviewer_id, "ACCESS_DENIED", f"HR tried to review {leave_owner_role} leave {leave_id}")
+            return jsonify({"error": "HR can only review employee leave requests."}), 403
+
+        # Rule: Only admin can review HR or admin leaves
+        if reviewer_role == "hr" and leave_owner_role in ("hr", "admin"):
+            log_action(reviewer_id, "ACCESS_DENIED", f"HR tried to review {leave_owner_role} leave {leave_id}")
+            return jsonify({"error": "Only an admin can review this leave request."}), 403
+
         leave_col.update_one(
             {"_id": ObjectId(leave_id)},
             {"$set": {
                 "status": data["status"],
-                "reviewed_by": reviewer_id, 
+                "reviewed_by": reviewer_id,
                 "reviewed_at": now_pht().isoformat()
             }}
         )
@@ -450,7 +482,6 @@ def review_leave(leave_id):
     except Exception as e:
         log_action("system", "REVIEW_LEAVE_ERROR", str(e))
         return jsonify({"error": "Failed to review leave"}), 500
-
 
 # ─── REPORTS ──────────────────────────────────────────────────────────────────
 @app.route("/api/reports/summary", methods=["GET"])
