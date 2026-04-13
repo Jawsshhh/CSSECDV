@@ -123,6 +123,7 @@ def require_role(*roles):
                 return fn(*args, **kwargs)
             except Exception:
                 # Fail securely — any error defaults to denied
+                log_action(user_id, "ACCESS_DENIED", f"Unauthorized access attempt to {request.path}")
                 return jsonify({"error": "Forbidden"}), 403
         return wrapper
     return decorator
