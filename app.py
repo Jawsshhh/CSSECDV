@@ -21,7 +21,6 @@ app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET", "super-secret-fallback-ke
 jwt = JWTManager(app)
 
 uri = os.getenv("MONGO_DB_URI")
-#MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(uri, server_api=ServerApi('1'))
 db = client["hr_logging_system"]
 

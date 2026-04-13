@@ -1,1261 +1,1291 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>HR Logging System</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-<style>
-/* ── RESET & VARS ─────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg:        #0d0f14;
-  --surface:   #141720;
-  --panel:     #1b1f2e;
-  --border:    #252a3a;
-  --accent:    #4f7cff;
-  --accent2:   #00e5b0;
-  --warn:      #ff6b3d;
-  --text:      #e8eaf2;
-  --muted:     #6b7280;
-  --success:   #22c55e;
-  --danger:    #ef4444;
-  --pending:   #f59e0b;
-  --radius:    8px;
-  --mono:      'DM Mono', monospace;
-  --display:   'Syne', sans-serif;
-}
-
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; }
-
-/* ── SCROLLBAR ──────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-/* ── LOGIN PAGE ─────────────────────────────────── */
-#login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  position: relative;
-  overflow: hidden;
-}
-#login-page::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 50% at 20% 50%, rgba(79,124,255,0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 60% at 80% 30%, rgba(0,229,176,0.06) 0%, transparent 70%);
-  pointer-events: none;
-}
-.login-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 48px 48px;
-  pointer-events: none;
-}
-.login-card {
-  position: relative;
-  z-index: 1;
-  width: 420px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 48px 40px;
-  animation: fadeUp 0.5s ease both;
-}
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.login-logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 36px;
-}
-.login-logo-icon {
-  width: 40px; height: 40px;
-  background: var(--accent);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px;
-}
-.login-logo h1 {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-.login-logo span { color: var(--muted); font-size: 12px; font-weight: 400; display: block; }
-.login-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; display: block; }
-.login-input {
-  width: 100%;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  margin-bottom: 20px;
-}
-.login-input:focus { border-color: var(--accent); }
-.login-btn {
-  width: 100%;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  padding: 13px;
-  font-family: var(--display);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
-  margin-top: 4px;
-}
-.login-btn:hover { opacity: 0.88; }
-.login-btn:active { transform: scale(0.98); }
-.login-error { color: var(--danger); font-size: 12px; margin-top: 12px; text-align: center; min-height: 18px; }
-.login-hint {
-  margin-top: 28px;
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.8;
-}
-.login-hint strong { color: var(--text); }
-
-/* ── APP SHELL ──────────────────────────────────── */
-#app { display: none; height: 100vh; flex-direction: column; }
-#app.visible { display: flex; }
-
-.topbar {
-  height: 56px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  gap: 16px;
-  flex-shrink: 0;
-}
-.topbar-brand {
-  font-family: var(--display);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.topbar-brand-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
-.topbar-sep { flex: 1; }
-.topbar-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-}
-.topbar-avatar {
-  width: 30px; height: 30px;
-  background: var(--accent);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: #fff;
-}
-.topbar-role {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 10px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--accent2);
-}
-.logout-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: var(--radius);
-  padding: 5px 12px;
-  font-family: var(--mono);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.logout-btn:hover { border-color: var(--danger); color: var(--danger); }
-
-.main-layout {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-/* ── SIDEBAR ────────────────────────────────────── */
-.sidebar {
-  width: 220px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  padding: 20px 0;
-  flex-shrink: 0;
-  overflow-y: auto;
-}
-.nav-section { padding: 0 12px; margin-bottom: 24px; }
-.nav-label { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; padding: 0 8px; margin-bottom: 8px; display: block; }
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: var(--radius);
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.15s;
-  border: 1px solid transparent;
-  margin-bottom: 2px;
-  user-select: none;
-}
-.nav-item:hover { background: var(--panel); color: var(--text); }
-.nav-item.active { background: rgba(79,124,255,0.12); color: var(--accent); border-color: rgba(79,124,255,0.2); }
-.nav-icon { font-size: 15px; width: 18px; text-align: center; }
-
-/* ── CONTENT ────────────────────────────────────── */
-.content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 28px 32px;
-  background: var(--bg);
-}
-.page { display: none; animation: fadeIn 0.25s ease; }
-.page.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 28px;
-}
-.page-title { font-family: var(--display); font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
-.page-sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
-
-/* ── STAT CARDS ─────────────────────────────────── */
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  position: relative;
-  overflow: hidden;
-}
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--accent);
-}
-.stat-card.green::before { background: var(--success); }
-.stat-card.amber::before { background: var(--pending); }
-.stat-card.red::before   { background: var(--danger); }
-.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-.stat-value { font-family: var(--display); font-size: 32px; font-weight: 800; letter-spacing: -1px; }
-.stat-icon { position: absolute; right: 16px; top: 16px; font-size: 22px; opacity: 0.2; }
-
-/* ── TABLE ──────────────────────────────────────── */
-.table-wrap {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 24px;
-}
-.table-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.table-title { font-family: var(--display); font-size: 14px; font-weight: 700; }
-table { width: 100%; border-collapse: collapse; }
-th {
-  text-align: left;
-  padding: 10px 16px;
-  font-size: 10px;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  font-weight: 500;
-}
-td {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(37,42,58,0.6);
-  font-size: 13px;
-  vertical-align: middle;
-}
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(255,255,255,0.015); }
-
-/* ── BADGES ─────────────────────────────────────── */
-.badge {
-  display: inline-block;
-  padding: 2px 9px;
-  border-radius: 20px;
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-.badge-pending  { background: rgba(245,158,11,0.15);  color: var(--pending); border: 1px solid rgba(245,158,11,0.3); }
-.badge-approved { background: rgba(34,197,94,0.15);   color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
-.badge-rejected { background: rgba(239,68,68,0.15);   color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
-.badge-admin    { background: rgba(239,68,68,0.12);   color: #f87171;        border: 1px solid rgba(239,68,68,0.2); }
-.badge-hr       { background: rgba(0,229,176,0.12);   color: var(--accent2); border: 1px solid rgba(0,229,176,0.2); }
-.badge-employee { background: rgba(79,124,255,0.12);  color: var(--accent);  border: 1px solid rgba(79,124,255,0.2); }
-
-/* ── BUTTONS ─────────────────────────────────────── */
-.btn {
-  padding: 8px 16px;
-  border-radius: var(--radius);
-  border: none;
-  font-family: var(--mono);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { opacity: 0.85; }
-.btn-success { background: rgba(34,197,94,0.15); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
-.btn-success:hover { background: rgba(34,197,94,0.25); }
-.btn-danger  { background: rgba(239,68,68,0.15);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
-.btn-danger:hover  { background: rgba(239,68,68,0.25); }
-.btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-.btn-ghost:hover   { color: var(--text); border-color: var(--muted); }
-.btn-sm { padding: 5px 10px; font-size: 11px; }
-
-/* ── FORMS & MODALS ──────────────────────────────── */
-.modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.7);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.2s;
-}
-.modal-overlay.open { opacity: 1; pointer-events: all; }
-.modal {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  width: 460px;
-  max-width: 95vw;
-  transform: translateY(16px);
-  transition: transform 0.2s;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-.modal-overlay.open .modal { transform: translateY(0); }
-.modal-title { font-family: var(--display); font-size: 18px; font-weight: 700; margin-bottom: 24px; }
-.form-row { margin-bottom: 16px; }
-.form-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 6px; }
-.form-input, .form-select, .form-textarea {
-  width: 100%;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
-.form-select option { background: var(--panel); }
-.form-textarea { resize: vertical; min-height: 80px; }
-.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
-
-/* ── ATTENDANCE CLOCK ─────────────────────────────── */
-.clock-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  margin-bottom: 24px;
-}
-.clock-time {
-  font-family: var(--display);
-  font-size: 48px;
-  font-weight: 800;
-  letter-spacing: -2px;
-  color: var(--accent);
-  min-width: 200px;
-}
-.clock-date { color: var(--muted); font-size: 13px; margin-top: 4px; }
-.clock-actions { display: flex; gap: 12px; }
-.clock-btn {
-  padding: 14px 28px;
-  border-radius: 10px;
-  border: none;
-  font-family: var(--display);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.clock-in  { background: var(--success); color: #fff; }
-.clock-in:hover  { opacity: 0.85; }
-.clock-out { background: var(--danger); color: #fff; }
-.clock-out:hover { opacity: 0.85; }
-.clock-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-/* ── TOAST ───────────────────────────────────────── */
-#toast {
-  position: fixed; bottom: 28px; right: 28px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 20px;
-  font-size: 13px;
-  z-index: 9999;
-  transform: translateY(80px);
-  opacity: 0;
-  transition: all 0.3s;
-  max-width: 320px;
-}
-#toast.show { transform: translateY(0); opacity: 1; }
-#toast.success { border-color: rgba(34,197,94,0.4); color: var(--success); }
-#toast.error   { border-color: rgba(239,68,68,0.4);  color: var(--danger); }
-
-/* ── EMPTY STATE ─────────────────────────────────── */
-.empty {
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.empty-icon { font-size: 32px; margin-bottom: 12px; }
-
-/* ── PROFILE CARD ────────────────────────────────── */
-.profile-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-.profile-avatar {
-  width: 64px; height: 64px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border-radius: 16px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--display);
-  font-size: 24px;
-  font-weight: 800;
-  color: #fff;
-  flex-shrink: 0;
-}
-.profile-name { font-family: var(--display); font-size: 20px; font-weight: 700; }
-.profile-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
-.profile-meta span { color: var(--text); }
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.info-item {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-}
-.info-key { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
-.info-val { font-size: 14px; color: var(--text); }
-</style>
-</head>
-<body>
-
-<!-- ═══════════ LOGIN ═══════════ -->
-<div id="login-page">
-  <div class="login-grid"></div>
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="login-logo-icon">🏢</div>
-      <div>
-        <h1>HR SYSTEM</h1>
-        <span>Logging & Management Platform</span>
-      </div>
-    </div>
-    <label class="login-label">Username</label>
-    <input class="login-input" id="login-user" type="text" placeholder="Enter username" autocomplete="off"/>
-    <label class="login-label">Password</label>
-    <input class="login-input" id="login-pass" type="password" placeholder="Enter password"/>
-    <button class="login-btn" onclick="doLogin()">Sign In →</button>
-    <div class="login-error" id="login-err"></div>
-    <div class="login-hint">
-      <strong>admin</strong> / admin123 — System Admin<br>
-      <strong>hr_staff</strong> / hr123 — HR Manager<br>
-      <strong>john_doe</strong> / employee123 — Employee
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════ APP ═══════════ -->
-<div id="app">
-  <!-- Topbar -->
-  <div class="topbar">
-    <div class="topbar-brand">
-      <div class="topbar-brand-dot"></div>
-      HR LOGGING SYSTEM
-    </div>
-    <div class="topbar-sep"></div>
-    <div class="topbar-user">
-      <div class="topbar-avatar" id="top-avatar">?</div>
-      <span id="top-name">—</span>
-      <span class="topbar-role" id="top-role">—</span>
-      <button class="logout-btn" onclick="doLogout()">Logout</button>
-    </div>
-  </div>
-
-  <div class="main-layout">
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar"></div>
-
-    <!-- Content -->
-    <div class="content">
-
-      <!-- ── Dashboard ── -->
-      <div class="page active" id="page-dashboard">
-        <div class="page-header">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HR Logging System</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <link href="index.css" rel="stylesheet" />
+  </head>
+  <body>
+    <!-- ═══════════ LOGIN ═══════════ -->
+    <div id="login-page">
+      <div class="login-grid"></div>
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo-icon">🏢</div>
           <div>
-            <div class="page-title">Dashboard</div>
-            <div class="page-sub" id="dash-greeting">Welcome back</div>
-          </div>
-          <button class="btn btn-primary" onclick="loadDashboard()">↻ Refresh</button>
-        </div>
-        <div class="stats-grid" id="stats-grid"></div>
-        <div id="dash-extra"></div>
-      </div>
-
-      <!-- ── Attendance ── -->
-      <div class="page" id="page-attendance">
-        <div class="page-header">
-          <div>
-            <div class="page-title">Attendance</div>
-            <div class="page-sub">Track your daily time in / time out</div>
+            <h1>HR SYSTEM</h1>
+            <span>Logging & Management Platform</span>
           </div>
         </div>
-        <div class="clock-card">
-          <div>
-            <div class="clock-time" id="live-clock">--:--:--</div>
-            <div class="clock-date" id="live-date">—</div>
+        <label class="login-label">Username</label>
+        <input
+          class="login-input"
+          id="login-user"
+          type="text"
+          placeholder="Enter username"
+          autocomplete="off"
+        />
+        <label class="login-label">Password</label>
+        <div class="password-container">
+          <input
+            class="login-input"
+            id="login-pass"
+            type="password"
+            placeholder="Enter password"
+          />
+          <button
+            type="button"
+            class="toggle-password"
+            onclick="togglePassword(this)"
+          >
+            <span class="material-icons">visibility_off</span>
+          </button>
+        </div>
+        <button class="login-btn" onclick="doLogin()">Sign In →</button>
+        <div class="login-error" id="login-err"></div>
+        <div class="login-hint">
+          <strong>admin</strong> / admin123 — System Admin<br />
+          <strong>hr_staff</strong> / hr123 — HR Manager<br />
+          <strong>john_doe</strong> / employee123 — Employee
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ APP ═══════════ -->
+    <div id="app">
+      <!-- Topbar -->
+      <div class="topbar">
+        <div class="topbar-brand">
+          <div class="topbar-brand-dot"></div>
+          HR LOGGING SYSTEM
+        </div>
+        <div class="topbar-sep"></div>
+        <div class="topbar-user">
+          <div class="topbar-avatar" id="top-avatar">?</div>
+          <span id="top-name">—</span>
+          <span class="topbar-role" id="top-role">—</span>
+          <button class="logout-btn" onclick="doLogout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="main-layout">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar"></div>
+
+        <!-- Content -->
+        <div class="content">
+          <!-- ── Dashboard ── -->
+          <div class="page active" id="page-dashboard">
+            <div class="page-header">
+              <div>
+                <div class="page-title">Dashboard</div>
+                <div class="page-sub" id="dash-greeting">Welcome back</div>
+              </div>
+              <button class="btn btn-primary" onclick="loadDashboard()">
+                ↻ Refresh
+              </button>
+            </div>
+            <div class="stats-grid" id="stats-grid"></div>
+            <div id="dash-extra"></div>
           </div>
-          <div class="clock-actions">
-            <button class="clock-btn clock-in"  id="btn-timein"  onclick="doTimeIn()">⏺ Time In</button>
-            <button class="clock-btn clock-out" id="btn-timeout" onclick="doTimeOut()">⏹ Time Out</button>
+
+          <!-- ── Attendance ── -->
+          <div class="page" id="page-attendance">
+            <div class="page-header">
+              <div>
+                <div class="page-title">Attendance</div>
+                <div class="page-sub">Track your daily time in / time out</div>
+              </div>
+            </div>
+            <div class="clock-card">
+              <div>
+                <div class="clock-time" id="live-clock">--:--:--</div>
+                <div class="clock-date" id="live-date">—</div>
+              </div>
+              <div class="clock-actions">
+                <button
+                  class="clock-btn clock-in"
+                  id="btn-timein"
+                  onclick="doTimeIn()"
+                >
+                  ⏺ Time In
+                </button>
+                <button
+                  class="clock-btn clock-out"
+                  id="btn-timeout"
+                  onclick="doTimeOut()"
+                >
+                  ⏹ Time Out
+                </button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <div class="table-header">
+                <span class="table-title"
+                  >Recent Attendance (Last 30 Days)</span
+                >
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Time In</th>
+                    <th>Time Out</th>
+                    <th>Hours</th>
+                    <th>Overtime</th>
+                  </tr>
+                </thead>
+                <tbody id="attendance-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── Leave ── -->
+          <div class="page" id="page-leave">
+            <div class="page-header">
+              <div>
+                <div class="page-title">Leave Requests</div>
+                <div class="page-sub">
+                  Submit and track your leave applications
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="openLeaveModal()">
+                + New Request
+              </button>
+            </div>
+            <div class="table-wrap">
+              <div class="table-header">
+                <span class="table-title">My Leave History</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Applied</th>
+                  </tr>
+                </thead>
+                <tbody id="leave-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── HR: All Attendance ── -->
+          <div class="page" id="page-hr-attendance">
+            <div class="page-header">
+              <div>
+                <div class="page-title">Attendance Monitor</div>
+                <div class="page-sub">All employee attendance logs</div>
+              </div>
+              <button class="btn btn-primary" onclick="loadHRAttendance()">
+                ↻ Refresh
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Dept</th>
+                    <th>Date</th>
+                    <th>Time In</th>
+                    <th>Time Out</th>
+                    <th>Hours</th>
+                    <th>OT</th>
+                  </tr>
+                </thead>
+                <tbody id="hr-attendance-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── HR: Leave Approvals ── -->
+          <div class="page" id="page-hr-leave">
+            <div class="page-header">
+              <div>
+                <div class="page-title">Leave Approvals</div>
+                <div class="page-sub">Review and manage leave requests</div>
+              </div>
+              <button class="btn btn-primary" onclick="loadHRLeave()">
+                ↻ Refresh
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Dept</th>
+                    <th>Type</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="hr-leave-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── HR: Reports ── -->
+          <div class="page" id="page-hr-reports">
+            <div class="page-header">
+              <div>
+                <div class="page-title">Reports</div>
+                <div class="page-sub">Generate workforce insights</div>
+              </div>
+              <button class="btn btn-primary" onclick="loadHRReports()">
+                ↻ Refresh
+              </button>
+            </div>
+            <div class="stats-grid" id="report-stats"></div>
+            <div id="report-extra"></div>
+          </div>
+
+          <!-- ── Admin: Users ── -->
+          <div class="page" id="page-admin-users">
+            <div class="page-header">
+              <div>
+                <div class="page-title">User Management</div>
+                <div class="page-sub">Create and manage accounts</div>
+              </div>
+              <button class="btn btn-primary" onclick="openUserModal()">
+                + Add User
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Email</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="users-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── Admin: Logs ── -->
+          <div class="page" id="page-admin-logs">
+            <div class="page-header">
+              <div>
+                <div class="page-title">System Logs</div>
+                <div class="page-sub">Full audit trail</div>
+              </div>
+              <button class="btn btn-primary" onclick="loadLogs()">
+                ↻ Refresh
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>User ID</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="logs-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── Profile ── -->
+          <div class="page" id="page-profile">
+            <div class="page-header">
+              <div>
+                <div class="page-title">My Profile</div>
+                <div class="page-sub">Personal information</div>
+              </div>
+              <div style="display: flex; gap: 10px">
+                <button
+                  class="btn btn-ghost"
+                  onclick="openSecurityQuestionModal()"
+                >
+                  🔐 Security Question
+                </button>
+                <button
+                  class="btn btn-primary"
+                  onclick="openChangePasswordModal()"
+                >
+                  🔑 Change Password
+                </button>
+              </div>
+            </div>
+            <div
+              id="last-login-banner"
+              style="display: none; margin-bottom: 16px"
+            ></div>
+            <div id="profile-content"></div>
           </div>
         </div>
-        <div class="table-wrap">
-          <div class="table-header"><span class="table-title">Recent Attendance (Last 30 Days)</span></div>
-          <table><thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>Overtime</th></tr></thead>
-          <tbody id="attendance-tbody"></tbody></table>
-        </div>
+        <!-- /content -->
       </div>
+      <!-- /main-layout -->
+    </div>
+    <!-- /app -->
 
-      <!-- ── Leave ── -->
-      <div class="page" id="page-leave">
-        <div class="page-header">
-          <div>
-            <div class="page-title">Leave Requests</div>
-            <div class="page-sub">Submit and track your leave applications</div>
+    <!-- ── Modals ── -->
+    <div class="modal-overlay" id="modal-leave">
+      <div class="modal">
+        <div class="modal-title">📅 Submit Leave Request</div>
+        <div class="form-row">
+          <label class="form-label">Leave Type</label>
+          <select class="form-select" id="lv-type">
+            <option>Vacation</option>
+            <option>Sick Leave</option>
+            <option>Emergency</option>
+            <option>Maternity/Paternity</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">Start Date</label>
+            <input class="form-input" type="date" id="lv-start" />
           </div>
-          <button class="btn btn-primary" onclick="openLeaveModal()">+ New Request</button>
-        </div>
-        <div class="table-wrap">
-          <div class="table-header"><span class="table-title">My Leave History</span></div>
-          <table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Applied</th></tr></thead>
-          <tbody id="leave-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ── HR: All Attendance ── -->
-      <div class="page" id="page-hr-attendance">
-        <div class="page-header">
-          <div><div class="page-title">Attendance Monitor</div><div class="page-sub">All employee attendance logs</div></div>
-          <button class="btn btn-primary" onclick="loadHRAttendance()">↻ Refresh</button>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr><th>Employee</th><th>Dept</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>OT</th></tr></thead>
-          <tbody id="hr-attendance-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ── HR: Leave Approvals ── -->
-      <div class="page" id="page-hr-leave">
-        <div class="page-header">
-          <div><div class="page-title">Leave Approvals</div><div class="page-sub">Review and manage leave requests</div></div>
-          <button class="btn btn-primary" onclick="loadHRLeave()">↻ Refresh</button>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr><th>Employee</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody id="hr-leave-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ── HR: Reports ── -->
-      <div class="page" id="page-hr-reports">
-        <div class="page-header">
-          <div><div class="page-title">Reports</div><div class="page-sub">Generate workforce insights</div></div>
-          <button class="btn btn-primary" onclick="loadHRReports()">↻ Refresh</button>
-        </div>
-        <div class="stats-grid" id="report-stats"></div>
-        <div id="report-extra"></div>
-      </div>
-
-      <!-- ── Admin: Users ── -->
-      <div class="page" id="page-admin-users">
-        <div class="page-header">
-          <div><div class="page-title">User Management</div><div class="page-sub">Create and manage accounts</div></div>
-          <button class="btn btn-primary" onclick="openUserModal()">+ Add User</button>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Department</th><th>Email</th><th>Created</th><th>Actions</th></tr></thead>
-          <tbody id="users-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ── Admin: Logs ── -->
-      <div class="page" id="page-admin-logs">
-        <div class="page-header">
-          <div><div class="page-title">System Logs</div><div class="page-sub">Full audit trail</div></div>
-          <button class="btn btn-primary" onclick="loadLogs()">↻ Refresh</button>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr><th>Timestamp</th><th>User ID</th><th>Action</th><th>Details</th></tr></thead>
-          <tbody id="logs-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ── Profile ── -->
-      <div class="page" id="page-profile">
-        <div class="page-header">
-          <div><div class="page-title">My Profile</div><div class="page-sub">Personal information</div></div>
-          <div style="display:flex;gap:10px">
-            <button class="btn btn-ghost" onclick="openSecurityQuestionModal()">🔐 Security Question</button>
-            <button class="btn btn-primary" onclick="openChangePasswordModal()">🔑 Change Password</button>
+          <div class="form-row">
+            <label class="form-label">End Date</label>
+            <input class="form-input" type="date" id="lv-end" />
           </div>
         </div>
-        <div id="last-login-banner" style="display:none;margin-bottom:16px"></div>
-        <div id="profile-content"></div>
-      </div>
-
-    </div><!-- /content -->
-  </div><!-- /main-layout -->
-</div><!-- /app -->
-
-<!-- ── Modals ── -->
-<div class="modal-overlay" id="modal-leave">
-  <div class="modal">
-    <div class="modal-title">📅 Submit Leave Request</div>
-    <div class="form-row">
-      <label class="form-label">Leave Type</label>
-      <select class="form-select" id="lv-type">
-        <option>Vacation</option><option>Sick Leave</option><option>Emergency</option><option>Maternity/Paternity</option><option>Other</option>
-      </select>
-    </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Start Date</label>
-        <input class="form-input" type="date" id="lv-start"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">End Date</label>
-        <input class="form-input" type="date" id="lv-end"/>
+        <div class="form-row">
+          <label class="form-label">Reason</label>
+          <textarea
+            class="form-textarea"
+            id="lv-reason"
+            placeholder="Brief reason for leave..."
+          ></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-leave')">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="submitLeave()">
+            Submit Request
+          </button>
+        </div>
       </div>
     </div>
-    <div class="form-row">
-      <label class="form-label">Reason</label>
-      <textarea class="form-textarea" id="lv-reason" placeholder="Brief reason for leave..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('modal-leave')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitLeave()">Submit Request</button>
-    </div>
-  </div>
-</div>
 
-<div class="modal-overlay" id="modal-user">
-  <div class="modal">
-    <div class="modal-title" id="user-modal-title">👤 Create User</div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Full Name</label>
-        <input class="form-input" id="u-name" placeholder="Full Name"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">Username</label>
-        <input class="form-input" id="u-username" placeholder="username"/>
-      </div>
-    </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Password</label>
-        <input class="form-input" type="password" id="u-password" placeholder="Password"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">Role</label>
-        <select class="form-select" id="u-role">
-          <option value="employee">Employee</option>
-          <option value="hr">HR Staff</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Department</label>
-        <input class="form-input" id="u-dept" placeholder="e.g. Engineering"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">Email</label>
-        <input class="form-input" id="u-email" placeholder="email@company.com"/>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveUser()">Create User</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Change Password Modal ── -->
-<div class="modal-overlay" id="modal-change-password">
-  <div class="modal">
-    <div class="modal-title">🔑 Change Password</div>
-    <div style="background:rgba(79,124,255,0.08);border:1px solid rgba(79,124,255,0.2);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--muted);line-height:1.7">
-      ⚠️ Re-authentication required. You must enter your current password and answer your security question to proceed.
-    </div>
-    <div class="form-row">
-      <label class="form-label">Current Password <span style="color:var(--danger)">*</span></label>
-      <input class="form-input" type="password" id="cp-current" placeholder="Your current password" autocomplete="current-password"/>
-    </div>
-    <div class="form-row">
-      <label class="form-label" id="cp-sec-question-label">Security Question</label>
-      <input class="form-input" type="text" id="cp-sec-answer" placeholder="Your answer" autocomplete="off"/>
-    </div>
-    <hr style="border-color:var(--border);margin:16px 0"/>
-    <div class="form-row">
-      <label class="form-label">New Password <span style="color:var(--danger)">*</span></label>
-      <input class="form-input" type="password" id="cp-new" placeholder="Min 8 chars, upper, lower, digit, symbol" autocomplete="new-password" oninput="checkPasswordStrength(this.value)"/>
-      <div id="cp-strength-bar" style="margin-top:6px;height:4px;border-radius:2px;background:var(--border);overflow:hidden"><div id="cp-strength-fill" style="height:100%;width:0%;transition:width 0.3s,background 0.3s"></div></div>
-      <div id="cp-strength-label" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
-    </div>
-    <div class="form-row">
-      <label class="form-label">Confirm New Password <span style="color:var(--danger)">*</span></label>
-      <input class="form-input" type="password" id="cp-confirm" placeholder="Repeat new password" autocomplete="new-password"/>
-    </div>
-    <div id="cp-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('modal-change-password')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitChangePassword()">Change Password</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Security Question Modal ── -->
-<div class="modal-overlay" id="modal-security-question">
-  <div class="modal">
-    <div class="modal-title">🔐 Security Question Setup</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.6">
-      Your security question will be required to verify your identity when changing your password. Choose a question with a unique, personal answer.
-    </div>
-    <div class="form-row">
-      <label class="form-label">Question</label>
-      <select class="form-select" id="sq-question"></select>
-    </div>
-    <div class="form-row">
-      <label class="form-label">Your Answer</label>
-      <input class="form-input" type="text" id="sq-answer" placeholder="Answer (case-insensitive)" autocomplete="off"/>
-    </div>
-    <div id="sq-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('modal-security-question')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveSecurityQuestion()">Save Question</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Edit User Modal ── -->
-<div class="modal-overlay" id="modal-edit-user">
-  <div class="modal">
-    <div class="modal-title">✏️ Edit User</div>
-    <input type="hidden" id="eu-id"/>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Full Name</label>
-        <input class="form-input" id="eu-name" placeholder="Full Name"/>
-      </div>
-      <div class="form-row">
-        <label class="form-label">Username</label>
-        <input class="form-input" id="eu-username" placeholder="username"/>
+    <div class="modal-overlay" id="modal-user">
+      <div class="modal">
+        <div class="modal-title" id="user-modal-title">👤 Create User</div>
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">Full Name</label>
+            <input class="form-input" id="u-name" placeholder="Full Name" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Username</label>
+            <input class="form-input" id="u-username" placeholder="username" />
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">Password</label>
+            <div class="password-container">
+              <input
+                class="form-input"
+                type="password"
+                id="u-password"
+                placeholder="Password"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                onclick="togglePassword(this)"
+              >
+                <span class="material-icons">visibility_off</span>
+              </button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Role</label>
+            <select class="form-select" id="u-role">
+              <option value="employee">Employee</option>
+              <option value="hr">HR Staff</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">Department</label>
+            <input
+              class="form-input"
+              id="u-dept"
+              placeholder="e.g. Engineering"
+            />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Email</label>
+            <input
+              class="form-input"
+              id="u-email"
+              placeholder="email@company.com"
+            />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-user')">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="saveUser()">
+            Create User
+          </button>
+        </div>
       </div>
     </div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">Role</label>
-        <select class="form-select" id="eu-role">
-          <option value="employee">Employee</option>
-          <option value="hr">HR Staff</option>
-          <option value="admin">Admin</option>
-        </select>
+
+    <!-- ── Change Password Modal ── -->
+    <div class="modal-overlay" id="modal-change-password">
+      <div class="modal">
+        <div class="modal-title">🔑 Change Password</div>
+        <div
+          style="
+            background: rgba(79, 124, 255, 0.08);
+            border: 1px solid rgba(79, 124, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.7;
+          "
+        >
+          ⚠️ Re-authentication required. You must enter your current password
+          and answer your security question to proceed.
+        </div>
+        <div class="form-row">
+          <label class="form-label"
+            >Current Password <span style="color: var(--danger)">*</span></label
+          >
+          <div class="password-container">
+            <input
+              class="form-input"
+              type="password"
+              id="cp-current"
+              placeholder="Your current password"
+              autocomplete="current-password"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              onclick="togglePassword(this)"
+            >
+              <span class="material-icons">visibility_off</span>
+            </button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label" id="cp-sec-question-label"
+            >Security Question</label
+          >
+          <input
+            class="form-input"
+            type="text"
+            id="cp-sec-answer"
+            placeholder="Your answer"
+            autocomplete="off"
+          />
+        </div>
+        <hr style="border-color: var(--border); margin: 16px 0" />
+        <div class="form-row">
+          <label class="form-label"
+            >New Password <span style="color: var(--danger)">*</span></label
+          >
+          <div class="password-container">
+            <input
+              class="form-input"
+              type="password"
+              id="cp-new"
+              placeholder="Min 8 chars, upper, lower, digit, symbol"
+              autocomplete="new-password"
+              oninput="checkPasswordStrength(this.value)"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              onclick="togglePassword(this)"
+            >
+              <span class="material-icons">visibility_off</span>
+            </button>
+          </div>
+
+          <div
+            id="cp-strength-bar"
+            style="
+              margin-top: 6px;
+              height: 4px;
+              border-radius: 2px;
+              background: var(--border);
+              overflow: hidden;
+            "
+          >
+            <div
+              id="cp-strength-fill"
+              style="
+                height: 100%;
+                width: 0%;
+                transition:
+                  width 0.3s,
+                  background 0.3s;
+              "
+            ></div>
+          </div>
+          <div
+            id="cp-strength-label"
+            style="font-size: 10px; color: var(--muted); margin-top: 4px"
+          ></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label"
+            >Confirm New Password
+            <span style="color: var(--danger)">*</span></label
+          >
+          <div class="password-container">
+            <input
+              class="form-input"
+              type="password"
+              id="cp-confirm"
+              placeholder="Repeat new password"
+              autocomplete="new-password"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              onclick="togglePassword(this)"
+            >
+              <span class="material-icons">visibility_off</span>
+            </button>
+          </div>
+        </div>
+        <div
+          id="cp-error"
+          style="
+            color: var(--danger);
+            font-size: 12px;
+            min-height: 16px;
+            margin-bottom: 4px;
+          "
+        ></div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="closeModal('modal-change-password')"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="submitChangePassword()">
+            Change Password
+          </button>
+        </div>
       </div>
-      <div class="form-row">
-        <label class="form-label">Department</label>
-        <input class="form-input" id="eu-dept" placeholder="e.g. Engineering"/>
+    </div>
+
+    <!-- ── Security Question Modal ── -->
+    <div class="modal-overlay" id="modal-security-question">
+      <div class="modal">
+        <div class="modal-title">🔐 Security Question Setup</div>
+        <div
+          style="
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 18px;
+            line-height: 1.6;
+          "
+        >
+          Your security question will be required to verify your identity when
+          changing your password. Choose a question with a unique, personal
+          answer.
+        </div>
+        <div class="form-row">
+          <label class="form-label">Question</label>
+          <select class="form-select" id="sq-question"></select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Your Answer</label>
+          <input
+            class="form-input"
+            type="text"
+            id="sq-answer"
+            placeholder="Answer (case-insensitive)"
+            autocomplete="off"
+          />
+        </div>
+        <div
+          id="sq-error"
+          style="
+            color: var(--danger);
+            font-size: 12px;
+            min-height: 16px;
+            margin-bottom: 4px;
+          "
+        ></div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="closeModal('modal-security-question')"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="saveSecurityQuestion()">
+            Save Question
+          </button>
+        </div>
       </div>
     </div>
-    <div class="form-row">
-      <label class="form-label">Email</label>
-      <input class="form-input" id="eu-email" placeholder="email@company.com"/>
-    </div>
-    <hr style="border-color:var(--border);margin:8px 0 16px"/>
-    <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Reset Password <span style="color:var(--border);font-size:10px">(optional)</span></div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label class="form-label">New Password</label>
-        <input class="form-input" type="password" id="eu-new-password" placeholder="Leave blank to keep current" autocomplete="new-password"/>
+
+    <!-- ── Edit User Modal ── -->
+    <div class="modal-overlay" id="modal-edit-user">
+      <div class="modal">
+        <div class="modal-title">✏️ Edit User</div>
+        <input type="hidden" id="eu-id" />
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">Full Name</label>
+            <input class="form-input" id="eu-name" placeholder="Full Name" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Username</label>
+            <input class="form-input" id="eu-username" placeholder="username" />
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">Role</label>
+            <select class="form-select" id="eu-role">
+              <option value="employee">Employee</option>
+              <option value="hr">HR Staff</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Department</label>
+            <input
+              class="form-input"
+              id="eu-dept"
+              placeholder="e.g. Engineering"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Email</label>
+          <input
+            class="form-input"
+            id="eu-email"
+            placeholder="email@company.com"
+          />
+        </div>
+        <hr style="border-color: var(--border); margin: 8px 0 16px" />
+        <div
+          style="
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+          "
+        >
+          Reset Password
+          <span style="color: var(--border); font-size: 10px">(optional)</span>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row">
+            <label class="form-label">New Password</label>
+            <div class="password-container">
+              <input
+                class="form-input"
+                type="password"
+                id="eu-new-password"
+                placeholder="Leave blank to keep current"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                onclick="togglePassword(this)"
+              >
+                <span class="material-icons">visibility_off</span>
+              </button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Confirm Password</label>
+            <div class="password-container">
+              <input
+                class="form-input"
+                type="password"
+                id="eu-confirm-password"
+                placeholder="Repeat new password"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                onclick="togglePassword(this)"
+              >
+                <span class="material-icons">visibility_off</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div
+          id="eu-error"
+          style="
+            color: var(--danger);
+            font-size: 12px;
+            min-height: 16px;
+            margin-bottom: 4px;
+          "
+        ></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-edit-user')">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="submitEditUser()">
+            Save Changes
+          </button>
+        </div>
       </div>
-      <div class="form-row">
-        <label class="form-label">Confirm Password</label>
-        <input class="form-input" type="password" id="eu-confirm-password" placeholder="Repeat new password" autocomplete="new-password"/>
+    </div>
+
+    <!-- ── Reauth Modal ── -->
+    <div class="modal-overlay" id="modal-reauth">
+      <div class="modal">
+        <div class="modal-title">🔒 Confirm Action</div>
+        <p
+          id="reauth-message"
+          style="
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 18px;
+            line-height: 1.6;
+          "
+        ></p>
+        <div class="form-row">
+          <label class="form-label">Your Password</label>
+          <div class="password-container">
+            <input
+              class="form-input"
+              type="password"
+              id="reauth-password-input"
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              onclick="togglePassword(this)"
+            >
+              <span class="material-icons">visibility_off</span>
+            </button>
+          </div>
+        </div>
+        <div
+          id="reauth-error"
+          style="
+            color: var(--danger);
+            font-size: 12px;
+            min-height: 16px;
+            margin-bottom: 4px;
+          "
+        ></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeReauthModal()">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="submitReauth()">
+            Confirm
+          </button>
+        </div>
       </div>
     </div>
-    <div id="eu-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('modal-edit-user')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitEditUser()">Save Changes</button>
-    </div>
-  </div>
-</div>
 
-<!-- ── Reauth Modal ── -->
-<div class="modal-overlay" id="modal-reauth">
-  <div class="modal">
-    <div class="modal-title">🔒 Confirm Action</div>
-    <p id="reauth-message" style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.6"></p>
-    <div class="form-row">
-      <label class="form-label">Your Password</label>
-      <input class="form-input" type="password" id="reauth-password-input" placeholder="Enter your password"/>
-    </div>
-    <div id="reauth-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeReauthModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="submitReauth()">Confirm</button>
-    </div>
-  </div>
-</div>
+    <div id="toast"></div>
+    <script src="authguard.js"></script>
 
-<div id="toast"></div>
-<script src="authguard.js"></script>
+    <script>
+      function togglePassword(button) {
+        const passwordField = button.previousElementSibling; // Get the input field preceding the button
 
-<script>
-const API = '';
-let currentUser = null;
+        if (passwordField.type === "password") {
+          passwordField.type = "text"; // Show password
+          button.innerHTML = '<span class="material-icons">visibility</span>'; // Show the 'visibility' icon
+        } else {
+          passwordField.type = "password"; // Hide password
+          button.innerHTML =
+            '<span class="material-icons">visibility_off</span>'; // Show the 'visibility_off' icon
+        }
+      }
 
+      const API = "";
+      let currentUser = null;
 
+      // ── UTILS ────────────────────────────────────────────────────────────────────
+      const $ = (id) => document.getElementById(id);
+      function toast(msg, type = "success") {
+        const el = $("toast");
+        el.textContent = msg;
+        el.className = `show ${type}`;
+        setTimeout(() => (el.className = ""), 2800);
+      }
+      function fmt(iso) {
+        if (!iso) return "—";
+        return new Date(iso).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      function fmtDate(iso) {
+        if (!iso) return "—";
+        return iso.split("T")[0];
+      }
+      function calcHours(tin, tout) {
+        if (!tin || !tout) return "—";
+        const h = (new Date(tout) - new Date(tin)) / 3600000;
+        return h.toFixed(2) + "h";
+      }
+      function openModal(id) {
+        $(id).classList.add("open");
+      }
+      function closeModal(id) {
+        $(id).classList.remove("open");
+      }
 
-// ── UTILS ────────────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
-function toast(msg, type = 'success') {
-  const el = $('toast');
-  el.textContent = msg;
-  el.className = `show ${type}`;
-  setTimeout(() => el.className = '', 2800);
-}
-function fmt(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-}
-function fmtDate(iso) {
-  if (!iso) return '—';
-  return iso.split('T')[0];
-}
-function calcHours(tin, tout) {
-  if (!tin || !tout) return '—';
-  const h = (new Date(tout) - new Date(tin)) / 3600000;
-  return h.toFixed(2) + 'h';
-}
-function openModal(id)  { $(id).classList.add('open'); }
-function closeModal(id) { $(id).classList.remove('open'); }
+      async function api(path, method = "GET", body = null) {
+        const headers = {
+          "Content-Type": "application/json",
+        };
+        const token = localStorage.getItem("access_token");
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const opts = { method, headers };
+        if (body) opts.body = JSON.stringify(body);
+        const r = await fetch(API + path, opts);
+        const isReauthEndpoint =
+          path === "/api/login" ||
+          path.includes("/review") ||
+          (path.startsWith("/api/users/") && method === "PUT");
+        if (r.status === 401 && !isReauthEndpoint) {
+          doLogout();
+          toast("Session expired. Please log in again.", "error");
+          return { error: "Unauthorized" };
+        }
+        if (r.status === 423) {
+          const data = await r.json();
+          return { error: data.error, locked: true };
+        }
 
-async function api(path, method = 'GET', body = null) {
-  const headers = {
-    'Content-Type': 'application/json'
-  };
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  const opts = { method, headers };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(API + path, opts);
-  const isReauthEndpoint = path === '/api/login'
-    || path.includes('/review')
-    || (path.startsWith('/api/users/') && method === 'PUT');
-  if (r.status === 401 && !isReauthEndpoint) {
-      doLogout();
-      toast("Session expired. Please log in again.", "error");
-      return { error: "Unauthorized" };
-  }
-  if (r.status === 423) {
-    const data = await r.json();
-    return { error: data.error, locked: true };
-  }
+        return r.json();
+      }
 
-  return r.json();
-}
+      // ── AUTH ─────────────────────────────────────────────────────────────────────
+      async function doLogin() {
+        const username = $("login-user").value.trim();
+        const password = $("login-pass").value;
+        if (!username || !password) {
+          $("login-err").textContent = "Please enter credentials";
+          return;
+        }
+        const res = await api("/api/login", "POST", { username, password });
+        if (res.error) {
+          $("login-err").textContent = res.error;
+          if (res.locked) {
+            $("login-err").style.color = "var(--warn)";
+            $("login-pass").disabled = true;
+            $("login-user").disabled = true;
+          }
+          return;
+        }
+        // Re-enable inputs on success
+        $("login-pass").disabled = false;
+        $("login-user").disabled = false;
+        if (res.error) {
+          $("login-err").textContent = res.error;
+          return;
+        }
+        localStorage.setItem("access_token", res.token);
+        currentUser = res.user;
+        localStorage.setItem("current_user", JSON.stringify(res.user));
+        // Store last login info for banner display on profile (#12)
+        localStorage.setItem("last_login", res.last_login || "");
+        localStorage.setItem("last_failed_login", res.last_failed_login || "");
+        $("login-err").textContent = "";
+        $("login-page").style.display = "none";
+        $("app").classList.add("visible");
+        $("top-name").textContent = currentUser.full_name;
+        $("top-role").textContent = currentUser.role.toUpperCase();
+        $("top-avatar").textContent = currentUser.full_name
+          .charAt(0)
+          .toUpperCase();
+        buildSidebar();
+        showPage("dashboard");
+      }
+      $("login-pass").addEventListener(
+        "keydown",
+        (e) => e.key === "Enter" && doLogin(),
+      );
+      $("login-user").addEventListener(
+        "keydown",
+        (e) => e.key === "Enter" && $("login-pass").focus(),
+      );
 
-// ── AUTH ─────────────────────────────────────────────────────────────────────
-async function doLogin() {
-  const username = $('login-user').value.trim();
-  const password = $('login-pass').value;
-  if (!username || !password) { $('login-err').textContent = 'Please enter credentials'; return; }
-  const res = await api('/api/login', 'POST', {username, password});
-  if (res.error) {
-    $('login-err').textContent = res.error;
-    if (res.locked) {
-      $('login-err').style.color = 'var(--warn)';   
-      $('login-pass').disabled = true;
-      $('login-user').disabled = true;
-    }
-    return;
-  }
-  // Re-enable inputs on success 
-  $('login-pass').disabled = false;
-  $('login-user').disabled = false;
-  if (res.error) { $('login-err').textContent = res.error; return; }
-  localStorage.setItem('access_token', res.token);
-  currentUser = res.user;
-  localStorage.setItem('current_user', JSON.stringify(res.user));
-  // Store last login info for banner display on profile (#12)
-  localStorage.setItem('last_login', res.last_login || '');
-  localStorage.setItem('last_failed_login', res.last_failed_login || '');
-  $('login-err').textContent = '';
-  $('login-page').style.display = 'none';
-  $('app').classList.add('visible');
-  $('top-name').textContent = currentUser.full_name;
-  $('top-role').textContent = currentUser.role.toUpperCase();
-  $('top-avatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
-  buildSidebar();
-  showPage('dashboard');
-}
-$('login-pass').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
-$('login-user').addEventListener('keydown', e => e.key === 'Enter' && $('login-pass').focus());
+      function doLogout() {
+        currentUser = null;
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("current_user");
+        localStorage.removeItem("last_login");
+        localStorage.removeItem("last_failed_login");
+        $("app").classList.remove("visible");
+        $("login-page").style.display = "flex";
+        $("login-user").value = "";
+        $("login-pass").value = "";
+      }
 
-function doLogout() {
-  currentUser = null;
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('current_user');
-  localStorage.removeItem('last_login');
-  localStorage.removeItem('last_failed_login');
-  $('app').classList.remove('visible');
-  $('login-page').style.display = 'flex';
-  $('login-user').value = '';
-  $('login-pass').value = '';
-}
+      // ── SIDEBAR ──────────────────────────────────────────────────────────────────
+      function buildSidebar() {
+        const role = currentUser.role;
+        let html = "";
 
-// ── SIDEBAR ──────────────────────────────────────────────────────────────────
-function buildSidebar() {
-  const role = currentUser.role;
-  let html = '';
-
-  html += `<div class="nav-section"><span class="nav-label">Main</span>
+        html += `<div class="nav-section"><span class="nav-label">Main</span>
     <div class="nav-item" onclick="showPage('dashboard')"><span class="nav-icon">⬛</span> Dashboard</div>
     <div class="nav-item" onclick="showPage('profile')"><span class="nav-icon">👤</span> My Profile</div>
   </div>`;
 
-  if (role === 'employee' || role === 'hr' || role === 'admin') {
-    html += `<div class="nav-section"><span class="nav-label">Employee</span>
+        if (role === "employee" || role === "hr" || role === "admin") {
+          html += `<div class="nav-section"><span class="nav-label">Employee</span>
       <div class="nav-item" onclick="showPage('attendance')"><span class="nav-icon">🕐</span> Attendance</div>
       <div class="nav-item" onclick="showPage('leave')"><span class="nav-icon">📅</span> Leave Requests</div>
     </div>`;
-  }
+        }
 
-  if (role === 'hr' || role === 'admin') {
-    html += `<div class="nav-section"><span class="nav-label">HR Tools</span>
+        if (role === "hr" || role === "admin") {
+          html += `<div class="nav-section"><span class="nav-label">HR Tools</span>
       <div class="nav-item" onclick="showPage('hr-attendance')"><span class="nav-icon">📋</span> Attendance Log</div>
       <div class="nav-item" onclick="showPage('hr-leave')"><span class="nav-icon">✅</span> Leave Approvals</div>
       <div class="nav-item" onclick="showPage('hr-reports')"><span class="nav-icon">📊</span> Reports</div>
     </div>`;
-  }
+        }
 
-  if (role === 'admin') {
-    html += `<div class="nav-section"><span class="nav-label">Admin</span>
+        if (role === "admin") {
+          html += `<div class="nav-section"><span class="nav-label">Admin</span>
       <div class="nav-item" onclick="showPage('admin-users')"><span class="nav-icon">👥</span> User Management</div>
       <div class="nav-item" onclick="showPage('admin-logs')"><span class="nav-icon">🔍</span> System Logs</div>
     </div>`;
-  }
+        }
 
-  $('sidebar').innerHTML = html;
-}
+        $("sidebar").innerHTML = html;
+      }
 
-function showPage(name) {
-  if (!AuthGuard.enforce(name)) return;
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  $(`page-${name}`).classList.add('active');
-  const items = document.querySelectorAll('.nav-item');
-  items.forEach(i => { if (i.getAttribute('onclick')?.includes(name)) i.classList.add('active'); });
+      function showPage(name) {
+        if (!AuthGuard.enforce(name)) return;
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document
+          .querySelectorAll(".nav-item")
+          .forEach((n) => n.classList.remove("active"));
+        $(`page-${name}`).classList.add("active");
+        const items = document.querySelectorAll(".nav-item");
+        items.forEach((i) => {
+          if (i.getAttribute("onclick")?.includes(name))
+            i.classList.add("active");
+        });
 
-  const loaders = {
-    'dashboard':       loadDashboard,
-    'attendance':      loadAttendance,
-    'leave':           loadLeave,
-    'hr-attendance':   loadHRAttendance,
-    'hr-leave':        loadHRLeave,
-    'hr-reports':      loadHRReports,
-    'admin-users':     loadUsers,
-    'admin-logs':      loadLogs,
-    'profile':         loadProfile,
-  };
-  if (loaders[name]) loaders[name]();
-}
+        const loaders = {
+          dashboard: loadDashboard,
+          attendance: loadAttendance,
+          leave: loadLeave,
+          "hr-attendance": loadHRAttendance,
+          "hr-leave": loadHRLeave,
+          "hr-reports": loadHRReports,
+          "admin-users": loadUsers,
+          "admin-logs": loadLogs,
+          profile: loadProfile,
+        };
+        if (loaders[name]) loaders[name]();
+      }
 
-// ── DASHBOARD ────────────────────────────────────────────────────────────────
-async function loadDashboard() {
-  const role = currentUser.role;
-  $('dash-greeting').textContent = `Welcome back, ${currentUser.full_name} · ${new Date().toDateString()}`;
-  const summary = await api('/api/reports/summary');
+      // ── DASHBOARD ────────────────────────────────────────────────────────────────
+      async function loadDashboard() {
+        const role = currentUser.role;
+        $("dash-greeting").textContent =
+          `Welcome back, ${currentUser.full_name} · ${new Date().toDateString()}`;
+        const summary = await api("/api/reports/summary");
 
-  const statsEl = $('stats-grid');
-  if (role === 'admin' || role === 'hr') {
-    statsEl.innerHTML = `
+        const statsEl = $("stats-grid");
+        if (role === "admin" || role === "hr") {
+          statsEl.innerHTML = `
       <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-label">Total Users</div><div class="stat-value">${summary.total_users}</div></div>
       <div class="stat-card green"><span class="stat-icon">✅</span><div class="stat-label">Present Today</div><div class="stat-value">${summary.present_today}</div></div>
       <div class="stat-card amber"><span class="stat-icon">📅</span><div class="stat-label">Pending Leaves</div><div class="stat-value">${summary.pending_leave}</div></div>
       <div class="stat-card"><span class="stat-icon">⏰</span><div class="stat-label">Total OT Hours</div><div class="stat-value">${summary.total_overtime_hours}</div></div>
     `;
-  } else {
-    const att = await api(`/api/attendance/${currentUser._id}`);
-    const lvs = await api(`/api/leave/${currentUser._id}`);
-    const todayRec = att.find(a => a.date === new Date().toISOString().split('T')[0]);
-    const pendingLvs = lvs.filter(l => l.status === 'pending').length;
-    statsEl.innerHTML = `
-      <div class="stat-card ${todayRec?.time_in ? 'green' : 'red'}">
+        } else {
+          const att = await api(`/api/attendance/${currentUser._id}`);
+          const lvs = await api(`/api/leave/${currentUser._id}`);
+          const todayRec = att.find(
+            (a) => a.date === new Date().toISOString().split("T")[0],
+          );
+          const pendingLvs = lvs.filter((l) => l.status === "pending").length;
+          statsEl.innerHTML = `
+      <div class="stat-card ${todayRec?.time_in ? "green" : "red"}">
         <span class="stat-icon">🕐</span>
         <div class="stat-label">Today Status</div>
-        <div class="stat-value" style="font-size:20px">${todayRec?.time_in ? (todayRec?.time_out ? 'Completed' : 'Clocked In') : 'Absent'}</div>
+        <div class="stat-value" style="font-size:20px">${todayRec?.time_in ? (todayRec?.time_out ? "Completed" : "Clocked In") : "Absent"}</div>
       </div>
       <div class="stat-card"><span class="stat-icon">📅</span><div class="stat-label">Pending Leaves</div><div class="stat-value">${pendingLvs}</div></div>
       <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-label">Attendance Records</div><div class="stat-value">${att.length}</div></div>
     `;
-  }
-}
+        }
+      }
 
-// ── LIVE CLOCK ────────────────────────────────────────────────────────────────
-setInterval(() => {
-  if (!$('live-clock')) return;
-  const now = new Date();
-  $('live-clock').textContent = now.toLocaleTimeString();
-  $('live-date').textContent = now.toDateString();
-}, 1000);
+      // ── LIVE CLOCK ────────────────────────────────────────────────────────────────
+      setInterval(() => {
+        if (!$("live-clock")) return;
+        const now = new Date();
+        $("live-clock").textContent = now.toLocaleTimeString();
+        $("live-date").textContent = now.toDateString();
+      }, 1000);
 
-// ── ATTENDANCE ────────────────────────────────────────────────────────────────
-async function loadAttendance() {
-  const records = await api(`/api/attendance/${currentUser._id}`);
-  const today = new Date().toISOString().split('T')[0];
-  const todayRec = records.find(r => r.date === today);
-  $('btn-timein').disabled  = !!(todayRec?.time_in);
-  $('btn-timeout').disabled = !!(todayRec?.time_out) || !(todayRec?.time_in);
-  const tbody = $('attendance-tbody');
-  if (!records.length) { tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📋</div>No records yet</div></td></tr>`; return; }
-  tbody.innerHTML = records.map(r => {
-    const hrs = r.time_in && r.time_out ? ((new Date(r.time_out)-new Date(r.time_in))/3600000).toFixed(2)+'h' : '—';
-    return `<tr><td>${r.date}</td><td>${fmt(r.time_in)}</td><td>${fmt(r.time_out)}</td><td>${hrs}</td><td>${r.overtime_hours > 0 ? '+'+r.overtime_hours+'h' : '—'}</td></tr>`;
-  }).join('');
-}
+      // ── ATTENDANCE ────────────────────────────────────────────────────────────────
+      async function loadAttendance() {
+        const records = await api(`/api/attendance/${currentUser._id}`);
+        const today = new Date().toISOString().split("T")[0];
+        const todayRec = records.find((r) => r.date === today);
+        $("btn-timein").disabled = !!todayRec?.time_in;
+        $("btn-timeout").disabled = !!todayRec?.time_out || !todayRec?.time_in;
+        const tbody = $("attendance-tbody");
+        if (!records.length) {
+          tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📋</div>No records yet</div></td></tr>`;
+          return;
+        }
+        tbody.innerHTML = records
+          .map((r) => {
+            const hrs =
+              r.time_in && r.time_out
+                ? (
+                    (new Date(r.time_out) - new Date(r.time_in)) /
+                    3600000
+                  ).toFixed(2) + "h"
+                : "—";
+            return `<tr><td>${r.date}</td><td>${fmt(r.time_in)}</td><td>${fmt(r.time_out)}</td><td>${hrs}</td><td>${r.overtime_hours > 0 ? "+" + r.overtime_hours + "h" : "—"}</td></tr>`;
+          })
+          .join("");
+      }
 
-async function doTimeIn() {
-  const res = await api('/api/attendance/timein', 'POST', {user_id: currentUser._id});
-  if (res.error) { toast(res.error, 'error'); return; }
-  toast(`✅ Timed in at ${fmt(res.time)}`);
-  loadAttendance();
-}
-async function doTimeOut() {
-  const res = await api('/api/attendance/timeout', 'POST', {user_id: currentUser._id});
-  if (res.error) { toast(res.error, 'error'); return; }
-  toast(`✅ Timed out · ${res.hours_worked}h worked · OT: ${res.overtime}h`);
-  loadAttendance();
-}
+      async function doTimeIn() {
+        const res = await api("/api/attendance/timein", "POST", {
+          user_id: currentUser._id,
+        });
+        if (res.error) {
+          toast(res.error, "error");
+          return;
+        }
+        toast(`✅ Timed in at ${fmt(res.time)}`);
+        loadAttendance();
+      }
+      async function doTimeOut() {
+        const res = await api("/api/attendance/timeout", "POST", {
+          user_id: currentUser._id,
+        });
+        if (res.error) {
+          toast(res.error, "error");
+          return;
+        }
+        toast(
+          `✅ Timed out · ${res.hours_worked}h worked · OT: ${res.overtime}h`,
+        );
+        loadAttendance();
+      }
 
-// ── LEAVE ─────────────────────────────────────────────────────────────────────
-async function loadLeave() {
-  const records = await api(`/api/leave/${currentUser._id}`);
-  const tbody = $('leave-tbody');
-  if (!records.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">📅</div>No leave requests yet</div></td></tr>`; return; }
-  tbody.innerHTML = records.map(r => `<tr>
+      // ── LEAVE ─────────────────────────────────────────────────────────────────────
+      async function loadLeave() {
+        const records = await api(`/api/leave/${currentUser._id}`);
+        const tbody = $("leave-tbody");
+        if (!records.length) {
+          tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">📅</div>No leave requests yet</div></td></tr>`;
+          return;
+        }
+        tbody.innerHTML = records
+          .map(
+            (r) => `<tr>
     <td>${r.leave_type}</td>
     <td>${r.start_date}</td><td>${r.end_date}</td>
-    <td>${r.reason||'—'}</td>
+    <td>${r.reason || "—"}</td>
     <td><span class="badge badge-${r.status}">${r.status}</span></td>
     <td>${fmtDate(r.created_at)}</td>
-  </tr>`).join('');
-}
-function openLeaveModal() {
-  const today = new Date().toISOString().split('T')[0];
-  $('lv-start').value = today; $('lv-end').value = today;
-  openModal('modal-leave');
-}
-async function submitLeave() {
-  const res = await api('/api/leave', 'POST', {
-    user_id: currentUser._id,
-    leave_type: $('lv-type').value,
-    start_date: $('lv-start').value,
-    end_date: $('lv-end').value,
-    reason: $('lv-reason').value
-  });
-  if (res.error) { toast(res.error, 'error'); return; }
-  toast('✅ Leave request submitted');
-  closeModal('modal-leave');
-  loadLeave();
-}
+  </tr>`,
+          )
+          .join("");
+      }
+      function openLeaveModal() {
+        const today = new Date().toISOString().split("T")[0];
+        $("lv-start").value = today;
+        $("lv-end").value = today;
+        openModal("modal-leave");
+      }
+      async function submitLeave() {
+        const res = await api("/api/leave", "POST", {
+          user_id: currentUser._id,
+          leave_type: $("lv-type").value,
+          start_date: $("lv-start").value,
+          end_date: $("lv-end").value,
+          reason: $("lv-reason").value,
+        });
+        if (res.error) {
+          toast(res.error, "error");
+          return;
+        }
+        toast("✅ Leave request submitted");
+        closeModal("modal-leave");
+        loadLeave();
+      }
 
-// ── HR: ATTENDANCE ────────────────────────────────────────────────────────────
-async function loadHRAttendance() {
-  const records = await api('/api/attendance/all');
-  const tbody = $('hr-attendance-tbody');
-  if (!records.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">📋</div>No records</div></td></tr>`; return; }
-  tbody.innerHTML = records.map(r => {
-    const hrs = r.time_in && r.time_out ? ((new Date(r.time_out)-new Date(r.time_in))/3600000).toFixed(2) : null;
-    return `<tr>
-      <td>${r.full_name||r.user_id}</td>
-      <td>${r.department||'—'}</td>
+      // ── HR: ATTENDANCE ────────────────────────────────────────────────────────────
+      async function loadHRAttendance() {
+        const records = await api("/api/attendance/all");
+        const tbody = $("hr-attendance-tbody");
+        if (!records.length) {
+          tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">📋</div>No records</div></td></tr>`;
+          return;
+        }
+        tbody.innerHTML = records
+          .map((r) => {
+            const hrs =
+              r.time_in && r.time_out
+                ? (
+                    (new Date(r.time_out) - new Date(r.time_in)) /
+                    3600000
+                  ).toFixed(2)
+                : null;
+            return `<tr>
+      <td>${r.full_name || r.user_id}</td>
+      <td>${r.department || "—"}</td>
       <td>${r.date}</td>
       <td>${fmt(r.time_in)}</td><td>${fmt(r.time_out)}</td>
-      <td>${hrs ? hrs+'h' : '—'}</td>
-      <td>${r.overtime_hours > 0 ? '+'+r.overtime_hours+'h' : '—'}</td>
+      <td>${hrs ? hrs + "h" : "—"}</td>
+      <td>${r.overtime_hours > 0 ? "+" + r.overtime_hours + "h" : "—"}</td>
     </tr>`;
-  }).join('');
-}
+          })
+          .join("");
+      }
 
-// ── HR: LEAVE APPROVALS ───────────────────────────────────────────────────────
-async function loadHRLeave() {
-  const records = await api('/api/leave/all');
-  const tbody = $('hr-leave-tbody');
-  
-  if (!records.length) { 
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📅</div>No leave requests</div></td></tr>`; 
-    return; 
-  }
+      // ── HR: LEAVE APPROVALS ───────────────────────────────────────────────────────
+      async function loadHRLeave() {
+        const records = await api("/api/leave/all");
+        const tbody = $("hr-leave-tbody");
 
-  // Filter records based on the same rules used in the backend
-  const viewableRecords = records.filter(r => {
-    const isOwnLeave = r.user_id === currentUser._id;
-    
-    if (currentUser.role === 'admin') {
-      // Admins see everything EXCEPT their own leave (since they can't approve it)
-      return !isOwnLeave;
-    }
-    
-    if (currentUser.role === 'hr') {
-      // HR only sees leaves from users who are 'employees'
-      // Note: This assumes r.role is available or you check the leave_owner_role logic
-      return r.role === 'employee' && !isOwnLeave;
-    }
-    
-    return false;
-  });
+        if (!records.length) {
+          tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📅</div>No leave requests</div></td></tr>`;
+          return;
+        }
 
-  if (!viewableRecords.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔒</div>No leaves available for your review</div></td></tr>`;
-    return;
-  }
+        // Filter records based on the same rules used in the backend
+        const viewableRecords = records.filter((r) => {
+          const isOwnLeave = r.user_id === currentUser._id;
 
-  tbody.innerHTML = viewableRecords.map(r => `<tr>
-    <td>${r.full_name||r.user_id}</td>
-    <td>${r.department||'—'}</td>
+          if (currentUser.role === "admin") {
+            // Admins see everything EXCEPT their own leave (since they can't approve it)
+            return !isOwnLeave;
+          }
+
+          if (currentUser.role === "hr") {
+            // HR only sees leaves from users who are 'employees'
+            // Note: This assumes r.role is available or you check the leave_owner_role logic
+            return r.role === "employee" && !isOwnLeave;
+          }
+
+          return false;
+        });
+
+        if (!viewableRecords.length) {
+          tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔒</div>No leaves available for your review</div></td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = viewableRecords
+          .map(
+            (r) => `<tr>
+    <td>${r.full_name || r.user_id}</td>
+    <td>${r.department || "—"}</td>
     <td>${r.leave_type}</td>
     <td>${r.start_date}</td><td>${r.end_date}</td>
-    <td>${r.reason||'—'}</td>
+    <td>${r.reason || "—"}</td>
     <td><span class="badge badge-${r.status}">${r.status}</span></td>
     <td>
-      ${r.status==='pending' ? `
+      ${
+        r.status === "pending"
+          ? `
         <button class="btn btn-success btn-sm" onclick="reviewLeave('${r._id}','approved')">✓ Approve</button>
         <button class="btn btn-danger btn-sm" onclick="reviewLeave('${r._id}','rejected')">✗ Reject</button>
-      ` : '—'}
+      `
+          : "—"
+      }
     </td>
-  </tr>`).join('');
-}
-function reviewLeave(id, status) {
-    promptReauth(
-        `Enter your password to ${status} this leave request.`,
-        async (password) => {
+  </tr>`,
+          )
+          .join("");
+      }
+      function reviewLeave(id, status) {
+        promptReauth(
+          `Enter your password to ${status} this leave request.`,
+          async (password) => {
             try {
-                const res = await api(`/api/leave/${id}/review`, 'PUT', {
-                    status,
-                    reviewed_by: currentUser._id,
-                    reauth_password: password
-                });
-                console.log('review response:', res);
+              const res = await api(`/api/leave/${id}/review`, "PUT", {
+                status,
+                reviewed_by: currentUser._id,
+                reauth_password: password,
+              });
+              console.log("review response:", res);
 
-                if (res.error) {
-                    toast(`❌ ${res.error}`, 'error');
-                    return;
-                }
-                toast(`✅ Leave ${status}`);
-                loadHRLeave();
+              if (res.error) {
+                toast(`❌ ${res.error}`, "error");
+                return;
+              }
+              toast(`✅ Leave ${status}`);
+              loadHRLeave();
             } catch (err) {
-                toast('❌ An error occurred.', 'error');
+              toast("❌ An error occurred.", "error");
             }
-        }
-        
-    );
-}
+          },
+        );
+      }
 
-// ── HR: REPORTS ───────────────────────────────────────────────────────────────
-async function loadHRReports() {
-  const s = await api('/api/reports/summary');
-  const all_leave = await api('/api/leave/all');
-  const approved = all_leave.filter(l=>l.status==='approved').length;
-  const rejected = all_leave.filter(l=>l.status==='rejected').length;
-  $('report-stats').innerHTML = `
+      // ── HR: REPORTS ───────────────────────────────────────────────────────────────
+      async function loadHRReports() {
+        const s = await api("/api/reports/summary");
+        const all_leave = await api("/api/leave/all");
+        const approved = all_leave.filter(
+          (l) => l.status === "approved",
+        ).length;
+        const rejected = all_leave.filter(
+          (l) => l.status === "rejected",
+        ).length;
+        $("report-stats").innerHTML = `
     <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-label">Total Users</div><div class="stat-value">${s.total_users}</div></div>
     <div class="stat-card green"><span class="stat-icon">🟢</span><div class="stat-label">Present Today</div><div class="stat-value">${s.present_today}</div></div>
     <div class="stat-card amber"><span class="stat-icon">⏳</span><div class="stat-label">Pending Leaves</div><div class="stat-value">${s.pending_leave}</div></div>
@@ -1263,164 +1293,184 @@ async function loadHRReports() {
     <div class="stat-card red"><span class="stat-icon">❌</span><div class="stat-label">Rejected Leaves</div><div class="stat-value">${rejected}</div></div>
     <div class="stat-card"><span class="stat-icon">⏰</span><div class="stat-label">Total OT Hours</div><div class="stat-value">${s.total_overtime_hours}</div></div>
   `;
-}
+      }
 
-// ── ADMIN: USERS ──────────────────────────────────────────────────────────────
-let _userMap = {};
-async function loadUsers() {
-  const users = await api('/api/users');
-  _userMap = {};
-  users.forEach(u => _userMap[u._id] = u);
-  const tbody = $('users-tbody');
-  
-  tbody.innerHTML = users.map(u => {
-    // Check if the user in this row is the one currently logged in
-    const isSelf = u._id === currentUser._id;
-    
-    return `<tr>
+      // ── ADMIN: USERS ──────────────────────────────────────────────────────────────
+      let _userMap = {};
+      async function loadUsers() {
+        const users = await api("/api/users");
+        _userMap = {};
+        users.forEach((u) => (_userMap[u._id] = u));
+        const tbody = $("users-tbody");
+
+        tbody.innerHTML = users
+          .map((u) => {
+            // Check if the user in this row is the one currently logged in
+            const isSelf = u._id === currentUser._id;
+
+            return `<tr>
       <td>${u.full_name}</td>
       <td><code>${u.username}</code></td>
       <td><span class="badge badge-${u.role}">${u.role}</span></td>
-      <td>${u.department||'—'}</td>
-      <td>${u.email||'—'}</td>
+      <td>${u.department || "—"}</td>
+      <td>${u.email || "—"}</td>
       <td>${fmtDate(u.created_at)}</td>
       <td>
         <button class="btn btn-ghost btn-sm" 
                 onclick="openEditUserModal('${u._id}')" 
-                ${isSelf ? 'disabled title="Edit via My Profile page"' : ''}>
+                ${isSelf ? 'disabled title="Edit via My Profile page"' : ""}>
           Edit
         </button>
         <button class="btn btn-danger btn-sm" 
                 onclick="deleteUser('${u._id}','${u.username}')" 
-                ${isSelf ? 'style="display:none"' : ''}>
+                ${isSelf ? 'style="display:none"' : ""}>
           Delete
         </button>
       </td>
     </tr>`;
-  }).join('');
-}
-function openUserModal() { openModal('modal-user'); }
-async function saveUser() {
-  const res = await api('/api/users', 'POST', {
-    full_name: $('u-name').value,
-    username:  $('u-username').value,
-    password:  $('u-password').value,
-    role:      $('u-role').value,
-    department:$('u-dept').value,
-    email:     $('u-email').value,
-    admin_id:  currentUser._id
-  });
-  if (res.error) { toast(res.error, 'error'); return; }
-  toast('✅ User created');
-  closeModal('modal-user');
-  loadUsers();
-}
-function openEditUserModal(id) {
-  const targetId = String(id).trim();
-  const currentId = String(currentUser._id).trim();
-
-  if (targetId === currentId) {
-    // This triggers your existing toast function
-    toast('Please use the "My Profile" page to update your own information.', 'error');
-    return;
-  }
-
-  const u = _userMap[id];
-  if (!u) { 
-    toast('User not found', 'error'); 
-    return; 
-  }
-  $('eu-id').value          = u._id;
-  $('eu-name').value        = u.full_name || '';
-  $('eu-username').value    = u.username  || '';
-  $('eu-role').value        = u.role      || 'employee';
-  $('eu-dept').value        = u.department|| '';
-  $('eu-email').value       = u.email     || '';
-  $('eu-new-password').value     = '';
-  $('eu-confirm-password').value = '';
-  $('eu-error').textContent      = '';
-  openModal('modal-edit-user');
-}
-
-async function submitEditUser() {
-  $('eu-error').textContent = '';
-  const id       = $('eu-id').value;
-  const newPw    = $('eu-new-password').value;
-  const confirmPw= $('eu-confirm-password').value;
-
-  if (newPw && newPw !== confirmPw) {
-    $('eu-error').textContent = 'Passwords do not match.';
-    return;
-  }
-
-  const payload = {
-    full_name:  $('eu-name').value.trim(),
-    username:   $('eu-username').value.trim(),
-    role:       $('eu-role').value,
-    department: $('eu-dept').value.trim(),
-    email:      $('eu-email').value.trim(),
-  };
-
-  if (newPw) {
-    // Require admin reauth before sending password change
-    closeModal('modal-edit-user');
-    promptReauth(
-      `You are resetting the password for "${payload.full_name}". Enter your own admin password to confirm.`,
-      async (adminPassword) => {
-        const res = await api(`/api/users/${id}`, 'PUT', {
-          ...payload,
-          new_password:   newPw,
-          admin_password: adminPassword,
+          })
+          .join("");
+      }
+      function openUserModal() {
+        openModal("modal-user");
+      }
+      async function saveUser() {
+        const res = await api("/api/users", "POST", {
+          full_name: $("u-name").value,
+          username: $("u-username").value,
+          password: $("u-password").value,
+          role: $("u-role").value,
+          department: $("u-dept").value,
+          email: $("u-email").value,
+          admin_id: currentUser._id,
         });
         if (res.error) {
-          // Re-open edit modal with error
-          openModal('modal-edit-user');
-          $('eu-error').textContent = res.error;
+          toast(res.error, "error");
           return;
         }
-        toast('✅ User updated & password reset');
+        toast("✅ User created");
+        closeModal("modal-user");
         loadUsers();
       }
-    );
-    return;
-  }
+      function openEditUserModal(id) {
+        const targetId = String(id).trim();
+        const currentId = String(currentUser._id).trim();
 
-  const res = await api(`/api/users/${id}`, 'PUT', payload);
-  if (res.error) { $('eu-error').textContent = res.error; return; }
-  toast('✅ User updated');
-  closeModal('modal-edit-user');
-  loadUsers();
-}
+        if (targetId === currentId) {
+          // This triggers your existing toast function
+          toast(
+            'Please use the "My Profile" page to update your own information.',
+            "error",
+          );
+          return;
+        }
 
-async function deleteUser(id, name) {
-  if (!confirm(`Delete user "${name}"?`)) return;
-  await api(`/api/users/${id}`, 'DELETE');
-  toast(`🗑️ Deleted ${name}`);
-  loadUsers();
-}
+        const u = _userMap[id];
+        if (!u) {
+          toast("User not found", "error");
+          return;
+        }
+        $("eu-id").value = u._id;
+        $("eu-name").value = u.full_name || "";
+        $("eu-username").value = u.username || "";
+        $("eu-role").value = u.role || "employee";
+        $("eu-dept").value = u.department || "";
+        $("eu-email").value = u.email || "";
+        $("eu-new-password").value = "";
+        $("eu-confirm-password").value = "";
+        $("eu-error").textContent = "";
+        openModal("modal-edit-user");
+      }
 
-// ── ADMIN: LOGS ───────────────────────────────────────────────────────────────
-async function loadLogs() {
-  const logs = await api('/api/logs');
-  const tbody = $('logs-tbody');
-  if (!logs.length) { tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔍</div>No logs</div></td></tr>`; return; }
-  tbody.innerHTML = logs.map(l => `<tr>
-    <td style="color:var(--muted);font-size:12px">${l.timestamp?.replace('T',' ').split('.')[0]||'—'}</td>
-    <td><code style="font-size:11px">${l.user_id?.slice(-8)||'—'}</code></td>
+      async function submitEditUser() {
+        $("eu-error").textContent = "";
+        const id = $("eu-id").value;
+        const newPw = $("eu-new-password").value;
+        const confirmPw = $("eu-confirm-password").value;
+
+        if (newPw && newPw !== confirmPw) {
+          $("eu-error").textContent = "Passwords do not match.";
+          return;
+        }
+
+        const payload = {
+          full_name: $("eu-name").value.trim(),
+          username: $("eu-username").value.trim(),
+          role: $("eu-role").value,
+          department: $("eu-dept").value.trim(),
+          email: $("eu-email").value.trim(),
+        };
+
+        if (newPw) {
+          // Require admin reauth before sending password change
+          closeModal("modal-edit-user");
+          promptReauth(
+            `You are resetting the password for "${payload.full_name}". Enter your own admin password to confirm.`,
+            async (adminPassword) => {
+              const res = await api(`/api/users/${id}`, "PUT", {
+                ...payload,
+                new_password: newPw,
+                admin_password: adminPassword,
+              });
+              if (res.error) {
+                // Re-open edit modal with error
+                openModal("modal-edit-user");
+                $("eu-error").textContent = res.error;
+                return;
+              }
+              toast("✅ User updated & password reset");
+              loadUsers();
+            },
+          );
+          return;
+        }
+
+        const res = await api(`/api/users/${id}`, "PUT", payload);
+        if (res.error) {
+          $("eu-error").textContent = res.error;
+          return;
+        }
+        toast("✅ User updated");
+        closeModal("modal-edit-user");
+        loadUsers();
+      }
+
+      async function deleteUser(id, name) {
+        if (!confirm(`Delete user "${name}"?`)) return;
+        await api(`/api/users/${id}`, "DELETE");
+        toast(`🗑️ Deleted ${name}`);
+        loadUsers();
+      }
+
+      // ── ADMIN: LOGS ───────────────────────────────────────────────────────────────
+      async function loadLogs() {
+        const logs = await api("/api/logs");
+        const tbody = $("logs-tbody");
+        if (!logs.length) {
+          tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔍</div>No logs</div></td></tr>`;
+          return;
+        }
+        tbody.innerHTML = logs
+          .map(
+            (l) => `<tr>
+    <td style="color:var(--muted);font-size:12px">${l.timestamp?.replace("T", " ").split(".")[0] || "—"}</td>
+    <td><code style="font-size:11px">${l.user_id?.slice(-8) || "—"}</code></td>
     <td><span style="color:var(--accent2)">${l.action}</span></td>
-    <td style="color:var(--muted)">${l.details||'—'}</td>
-  </tr>`).join('');
-}
+    <td style="color:var(--muted)">${l.details || "—"}</td>
+  </tr>`,
+          )
+          .join("");
+      }
 
-// ── PROFILE ───────────────────────────────────────────────────────────────────
-function loadProfile() {
-  const u = currentUser;
-  // Show last login info banner (#12)
-  showLastLoginBanner(
-    localStorage.getItem('last_login') || null,
-    localStorage.getItem('last_failed_login') || null
-  );
-  $('profile-content').innerHTML = `
+      // ── PROFILE ───────────────────────────────────────────────────────────────────
+      function loadProfile() {
+        const u = currentUser;
+        // Show last login info banner (#12)
+        showLastLoginBanner(
+          localStorage.getItem("last_login") || null,
+          localStorage.getItem("last_failed_login") || null,
+        );
+        $("profile-content").innerHTML = `
     <div class="profile-card">
       <div class="profile-avatar">${u.full_name.charAt(0).toUpperCase()}</div>
       <div>
@@ -1432,158 +1482,190 @@ function loadProfile() {
     <div class="info-grid">
       <div class="info-item"><div class="info-key">Full Name</div><div class="info-val">${u.full_name}</div></div>
       <div class="info-item"><div class="info-key">Username</div><div class="info-val">${u.username}</div></div>
-      <div class="info-item"><div class="info-key">Email</div><div class="info-val">${u.email||'—'}</div></div>
-      <div class="info-item"><div class="info-key">Department</div><div class="info-val">${u.department||'—'}</div></div>
+      <div class="info-item"><div class="info-key">Email</div><div class="info-val">${u.email || "—"}</div></div>
+      <div class="info-item"><div class="info-key">Department</div><div class="info-val">${u.department || "—"}</div></div>
       <div class="info-item"><div class="info-key">Role</div><div class="info-val">${u.role}</div></div>
     </div>
   `;
-}
+      }
 
-
-// ── LAST LOGIN BANNER (#12) ────────────────────────────────────────────────────
-function showLastLoginBanner(lastLogin, lastFailed) {
-  const banner = $('last-login-banner');
-  if (!banner) return;
-  if (!lastLogin && !lastFailed) { banner.style.display = 'none'; return; }
-  const fmt = iso => iso ? new Date(iso).toLocaleString() : '—';
-  banner.style.display = 'block';
-  banner.innerHTML = `
+      // ── LAST LOGIN BANNER (#12) ────────────────────────────────────────────────────
+      function showLastLoginBanner(lastLogin, lastFailed) {
+        const banner = $("last-login-banner");
+        if (!banner) return;
+        if (!lastLogin && !lastFailed) {
+          banner.style.display = "none";
+          return;
+        }
+        const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : "—");
+        banner.style.display = "block";
+        banner.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;gap:24px;flex-wrap:wrap;font-size:12px">
       <div><span style="color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-size:10px">Last Successful Login</span><br>
         <span style="color:var(--success)">${fmt(lastLogin)}</span></div>
       <div><span style="color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-size:10px">Last Failed Attempt</span><br>
-        <span style="color:${lastFailed ? 'var(--warn)' : 'var(--muted)'}">${fmt(lastFailed)}</span></div>
+        <span style="color:${lastFailed ? "var(--warn)" : "var(--muted)"}">${fmt(lastFailed)}</span></div>
     </div>`;
-}
+      }
 
-// ── SECURITY QUESTION ─────────────────────────────────────────────────────────
-async function openSecurityQuestionModal() {
-  $('sq-error').textContent = '';
-  $('sq-answer').value = '';
-  const res = await api('/api/security-questions');
-  const sel = $('sq-question');
-  sel.innerHTML = (res.questions || []).map(q => `<option value="${q}">${q}</option>`).join('');
-  // Pre-select existing question if set
-  if (currentUser.security_question) {
-    for (const opt of sel.options) {
-      if (opt.value === currentUser.security_question) { opt.selected = true; break; }
-    }
-  }
-  openModal('modal-security-question');
-}
+      // ── SECURITY QUESTION ─────────────────────────────────────────────────────────
+      async function openSecurityQuestionModal() {
+        $("sq-error").textContent = "";
+        $("sq-answer").value = "";
+        const res = await api("/api/security-questions");
+        const sel = $("sq-question");
+        sel.innerHTML = (res.questions || [])
+          .map((q) => `<option value="${q}">${q}</option>`)
+          .join("");
+        // Pre-select existing question if set
+        if (currentUser.security_question) {
+          for (const opt of sel.options) {
+            if (opt.value === currentUser.security_question) {
+              opt.selected = true;
+              break;
+            }
+          }
+        }
+        openModal("modal-security-question");
+      }
 
-async function saveSecurityQuestion() {
-  const question = $('sq-question').value;
-  const answer   = $('sq-answer').value.trim();
-  $('sq-error').textContent = '';
-  if (!answer) { $('sq-error').textContent = 'Please enter an answer.'; return; }
-  const res = await api('/api/security-question', 'POST', { question, answer });
-  if (res.error) { $('sq-error').textContent = res.error; return; }
-  currentUser.security_question = question;
-  localStorage.setItem('current_user', JSON.stringify(currentUser));
-  toast('✅ Security question saved');
-  closeModal('modal-security-question');
-}
+      async function saveSecurityQuestion() {
+        const question = $("sq-question").value;
+        const answer = $("sq-answer").value.trim();
+        $("sq-error").textContent = "";
+        if (!answer) {
+          $("sq-error").textContent = "Please enter an answer.";
+          return;
+        }
+        const res = await api("/api/security-question", "POST", {
+          question,
+          answer,
+        });
+        if (res.error) {
+          $("sq-error").textContent = res.error;
+          return;
+        }
+        currentUser.security_question = question;
+        localStorage.setItem("current_user", JSON.stringify(currentUser));
+        toast("✅ Security question saved");
+        closeModal("modal-security-question");
+      }
 
-// ── CHANGE PASSWORD ───────────────────────────────────────────────────────────
-async function openChangePasswordModal() {
-  $('cp-current').value = '';
-  $('cp-sec-answer').value = '';
-  $('cp-new').value = '';
-  $('cp-confirm').value = '';
-  $('cp-error').textContent = '';
-  checkPasswordStrength('');
+      // ── CHANGE PASSWORD ───────────────────────────────────────────────────────────
+      async function openChangePasswordModal() {
+        $("cp-current").value = "";
+        $("cp-sec-answer").value = "";
+        $("cp-new").value = "";
+        $("cp-confirm").value = "";
+        $("cp-error").textContent = "";
+        checkPasswordStrength("");
 
-  // Show the user's current security question
-  const q = currentUser.security_question;
-  $('cp-sec-question-label').textContent = q
-    ? `Security Question: ${q}`
-    : 'Security Question (not set — please set one first)';
+        // Show the user's current security question
+        const q = currentUser.security_question;
+        $("cp-sec-question-label").textContent = q
+          ? `Security Question: ${q}`
+          : "Security Question (not set — please set one first)";
 
-  if (!q) {
-    toast('Please set a security question before changing your password.', 'error');
-    setTimeout(() => {
-        closeModal('modal-change-password');
-        openSecurityQuestionModal();
-    }, 1000);
-    return;
-}
-$('cp-sec-question-label').textContent = `Security Question: ${q}`;
-$('cp-sec-answer').disabled = false;
-$('cp-sec-answer').placeholder = 'Your answer';
-openModal('modal-change-password');
-}
+        if (!q) {
+          toast(
+            "Please set a security question before changing your password.",
+            "error",
+          );
+          setTimeout(() => {
+            closeModal("modal-change-password");
+            openSecurityQuestionModal();
+          }, 1000);
+          return;
+        }
+        $("cp-sec-question-label").textContent = `Security Question: ${q}`;
+        $("cp-sec-answer").disabled = false;
+        $("cp-sec-answer").placeholder = "Your answer";
+        openModal("modal-change-password");
+      }
 
-function checkPasswordStrength(pw) {
-  const fill  = $('cp-strength-fill');
-  const label = $('cp-strength-label');
-  if (!fill) return;
-  let score = 0;
-  if (pw.length >= 8)                        score++;
-  if (/[A-Z]/.test(pw))                     score++;
-  if (/[a-z]/.test(pw))                     score++;
-  if (/[0-9]/.test(pw))                     score++;
-  if (/[^A-Za-z0-9]/.test(pw))             score++;
-  const pct    = (score / 5) * 100;
-  const colors = ['#ef4444','#f59e0b','#f59e0b','#22c55e','#22c55e'];
-  const labels = ['Very Weak','Weak','Fair','Strong','Very Strong'];
-  fill.style.width      = pct + '%';
-  fill.style.background = pw ? colors[score - 1] || '#ef4444' : 'transparent';
-  label.textContent     = pw ? labels[score - 1] || '' : '';
-}
+      function checkPasswordStrength(pw) {
+        const fill = $("cp-strength-fill");
+        const label = $("cp-strength-label");
+        if (!fill) return;
+        let score = 0;
+        if (pw.length >= 8) score++;
+        if (/[A-Z]/.test(pw)) score++;
+        if (/[a-z]/.test(pw)) score++;
+        if (/[0-9]/.test(pw)) score++;
+        if (/[^A-Za-z0-9]/.test(pw)) score++;
+        const pct = (score / 5) * 100;
+        const colors = ["#ef4444", "#f59e0b", "#f59e0b", "#22c55e", "#22c55e"];
+        const labels = ["Very Weak", "Weak", "Fair", "Strong", "Very Strong"];
+        fill.style.width = pct + "%";
+        fill.style.background = pw
+          ? colors[score - 1] || "#ef4444"
+          : "transparent";
+        label.textContent = pw ? labels[score - 1] || "" : "";
+      }
 
-async function submitChangePassword() {
-  $('cp-error').textContent = '';
-  const current = $('cp-current').value;
-  const answer  = $('cp-sec-answer').value.trim();
-  const newPw   = $('cp-new').value;
-  const confirm = $('cp-confirm').value;
+      async function submitChangePassword() {
+        $("cp-error").textContent = "";
+        const current = $("cp-current").value;
+        const answer = $("cp-sec-answer").value.trim();
+        const newPw = $("cp-new").value;
+        const confirm = $("cp-confirm").value;
 
-  if (!current)  { $('cp-error').textContent = 'Enter your current password.'; return; }
-  if (currentUser.security_question && !answer) { 
-      $('cp-error').textContent = 'Enter your security answer.'; 
-      return; 
-  }
-  if (!newPw)    { $('cp-error').textContent = 'Enter a new password.'; return; }
-  if (newPw !== confirm) { $('cp-error').textContent = 'New passwords do not match.'; return; }
+        if (!current) {
+          $("cp-error").textContent = "Enter your current password.";
+          return;
+        }
+        if (currentUser.security_question && !answer) {
+          $("cp-error").textContent = "Enter your security answer.";
+          return;
+        }
+        if (!newPw) {
+          $("cp-error").textContent = "Enter a new password.";
+          return;
+        }
+        if (newPw !== confirm) {
+          $("cp-error").textContent = "New passwords do not match.";
+          return;
+        }
 
-  const res = await api('/api/change-password', 'POST', {
-    current_password: current,
-    new_password:     newPw,
-    security_answer:  answer
-  });
-  if (res.error) { $('cp-error').textContent = res.error; return; }
-  toast('Password changed successfully');
-  closeModal('modal-change-password');
-}
+        const res = await api("/api/change-password", "POST", {
+          current_password: current,
+          new_password: newPw,
+          security_answer: answer,
+        });
+        if (res.error) {
+          $("cp-error").textContent = res.error;
+          return;
+        }
+        toast("Password changed successfully");
+        closeModal("modal-change-password");
+      }
 
-// ── REAUTH ────────────────────────────────────────────────────────────────────
-let pendingReauthCallback = null;
+      // ── REAUTH ────────────────────────────────────────────────────────────────────
+      let pendingReauthCallback = null;
 
-function promptReauth(message, callback) {
-  pendingReauthCallback = callback;
-  $('reauth-message').textContent = message;
-  $('reauth-password-input').value = '';
-  $('reauth-error').textContent = '';
-  openModal('modal-reauth');
-}
+      function promptReauth(message, callback) {
+        pendingReauthCallback = callback;
+        $("reauth-message").textContent = message;
+        $("reauth-password-input").value = "";
+        $("reauth-error").textContent = "";
+        openModal("modal-reauth");
+      }
 
-function closeReauthModal() {
-  pendingReauthCallback = null;
-  closeModal('modal-reauth');
-}
+      function closeReauthModal() {
+        pendingReauthCallback = null;
+        closeModal("modal-reauth");
+      }
 
-function submitReauth() {
-  const password = $('reauth-password-input').value;
-  if (!password) {
-    $('reauth-error').textContent = 'Please enter your password.';
-    return;
-  }
-  const callback = pendingReauthCallback; // save it first
-  closeReauthModal();                     // now safe to close (resets pendingReauthCallback)
-  if (callback) callback(password);       // use the saved reference
-}
-
-</script>
-</body>
+      function submitReauth() {
+        const password = $("reauth-password-input").value;
+        if (!password) {
+          $("reauth-error").textContent = "Please enter your password.";
+          return;
+        }
+        const callback = pendingReauthCallback; // save it first
+        closeReauthModal(); // now safe to close (resets pendingReauthCallback)
+        if (callback) callback(password); // use the saved reference
+      }
+    </script>
+  </body>
 </html>
