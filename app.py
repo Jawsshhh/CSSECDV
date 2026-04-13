@@ -304,11 +304,23 @@ def time_out():
             return jsonify({"error": "No time-in found for today"}), 400
         if record.get("time_out"):
             return jsonify({"error": "Already timed out today"}), 400
+        
         now = datetime.utcnow()
         time_in_dt = datetime.fromisoformat(record["time_in"])
         hours = (now - time_in_dt).total_seconds() / 3600
+
+        # ── Range validation ──────────────────────────────────────────
         if hours < 0:
+            log_action(user_id, "VALIDATION_FAILURE", "time_out before time_in")
             return jsonify({"error": "Invalid time calculation"}), 400
+        if hours < 0.1:
+            log_action(user_id, "VALIDATION_FAILURE", f"Shift too short: {hours:.2f}h")
+            return jsonify({"error": "Time-out is too soon after time-in."}), 400
+        if hours > 24:
+            log_action(user_id, "VALIDATION_FAILURE", f"Shift too long: {hours:.2f}h")
+            return jsonify({"error": "Shift duration exceeds 24 hours. Please contact HR."}), 400
+        # ─────────────────────────────────────────────────────────────
+
         overtime = max(0, hours - 8)
         attendance_col.update_one(
             {"_id": record["_id"]},
