@@ -351,7 +351,7 @@ def update_user(user_id):
             log_action(caller_id, "ADMIN_RESET_PASSWORD", f"target={user_id}")
  
         users_col.update_one({"_id": ObjectId(user_id)}, {"$set": update})
-        log_action(caller_id, "UPDATE_USER_SUCCESS", f"target={user_id} fields={list(update.keys())}")
+        log_action(caller_id, "UPDATE_USER_SUCCESS", f"Target={user_id} Fields={list(update.keys())}")
 
         return jsonify({"message": "User updated"})
     except Exception as e:
@@ -375,7 +375,7 @@ def delete_user(user_id):
 
         # 2. Prevent self-deletion
         if user_id == caller_id:
-            log_action(caller_id, "DELETE_USER_FAIL", f"Invalid user: {target.get('username')} ({user_id})")
+            log_action(caller_id, "DELETE_USER_FAIL", f"Tried to delete own account: {target.get('username')} ({user_id})")
             return jsonify({"error": "Security violation: You cannot delete your own account."}), 403
             
         # 3. Prevent deleting the last admin
@@ -678,8 +678,10 @@ def set_security_question():
         answer   = data.get("answer", "").strip().lower()
 
         if question not in ALLOWED_SECURITY_QUESTIONS:
+            log_action("system", "SET_SECURITY_QUESTION_FAIL", f"Invalid security question: {question}")
             return jsonify({"error": "Invalid security question"}), 400
         if len(answer) < 3:
+            log_action("system", "SET_SECURITY_QUESTION_FAIL", f"Invalid answer: {answer}")
             return jsonify({"error": "Answer is too short"}), 400
 
         answer_hash = hash_pw(answer)
@@ -690,6 +692,7 @@ def set_security_question():
         log_action(user_id, "SET_SECURITY_QUESTION")
         return jsonify({"message": "Security question saved"})
     except Exception as e:
+        log_action("system", "SET_SECURITY_QUESTION_FAIL", str(e))
         return jsonify({"error": "Failed to save security question"}), 500
 
 @app.route("/api/security-question/<user_id>", methods=["GET"])
@@ -697,10 +700,13 @@ def set_security_question():
 def get_security_question(user_id):
     caller_id = get_jwt_identity()
     if caller_id != user_id:
+        log_action("system", "GET_SECURITY_QUESTION_FAIL", f"Invalid access by {caller_id} on {user_id}")
         return jsonify({"error": "Forbidden"}), 403
     user = users_col.find_one({"_id": ObjectId(user_id)}, {"security_question": 1})
     if not user:
+        log_action("system", "GET_SECURITY_QUESTION_FAIL", f"Invalid user: {user_id}")
         return jsonify({"error": "User not found"}), 404
+    log_action(user_id, "GET_SECURITY_QUESTION_SUCCESS", f"Target={user_id} Security Question={user.get("security_question")}")
     return jsonify({"security_question": user.get("security_question")})
 
 # ─── INPUT VALIDATION ──────────────────────────────────────────────────────────
