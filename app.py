@@ -131,11 +131,13 @@ def require_role(*roles):
 def login():
     try:
         data = request.json
+        
         if not data or not data.get("username") or not data.get("password"):
             return jsonify({"error": "Invalid credentials"}), 401
 
         user = users_col.find_one({"username": data.get("username")})
         if not user:
+            log_action("system", "LOGIN_FAILED", f"Invalid username attempt: {data.get('username')}")
             return jsonify({"error": "Invalid credentials"}), 401
 
         locked, remaining = is_account_locked(user)
@@ -145,6 +147,7 @@ def login():
 
         if not check_pw(data.get("password", ""), user["password"]):
             record_failed_attempt(user)
+            log_action(str(user["_id"]), "LOGIN_FAILED", "Incorrect password entered")
             users_col.update_one(
                 {"_id": user["_id"]},
                 {"$set": {"last_failed_login": now_pht().isoformat()}}
