@@ -4,7 +4,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 from functools import wraps
 import os
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import bcrypt
 import re
 
+PHT = timezone(timedelta(hours=8))
 
 app = Flask(__name__, static_folder='frontend', static_url_path='')
 CORS(app)
@@ -31,6 +32,8 @@ logs_col        = db["system_logs"]
 VALID_ROLES = {"admin", "hr", "employee"}
 
 # Helper functions
+def now_pht():
+    return datetime.now(PHT)
 def hash_pw(pw): # Password Hashing
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(pw.encode('utf-8'), salt)
@@ -53,7 +56,7 @@ def log_action(user_id, action, details=""):
         "user_id": user_id,
         "action": action,
         "details": details,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": now_pht().isoformat()
     })
 
 def seed_defaults():
@@ -65,7 +68,7 @@ def seed_defaults():
             {"username": "jane_doe",  "password": hash_pw("employee123"),  "full_name": "Jane Doe",      "role": "employee", "department": "Marketing",   "email": "jane@company.com"},
         ]
         for u in defaults:
-            u["created_at"] = datetime.utcnow().isoformat()
+            u["created_at"] = now_pht().isoformat()
             u["password_changed_at"] = None
             u["password_history"] = [u["password"]]   # store initial hash in history
             u["security_question"] = None
@@ -82,8 +85,8 @@ def is_account_locked(user):
     if not user.get("locked_until"):
         return False, None
     locked_until = datetime.fromisoformat(user["locked_until"])
-    if datetime.utcnow() < locked_until:
-        remaining = int((locked_until - datetime.utcnow()).total_seconds() / 60) + 1
+    if now_pht() < locked_until:
+        remaining = int((locked_until - now_pht()).total_seconds() / 60) + 1
         return True, remaining
     # Lockout expired 
     users_col.update_one(
@@ -95,7 +98,7 @@ def is_account_locked(user):
 def record_failed_attempt(user):
     attempts = user.get("failed_attempts", 0) + 1
     if attempts >= MAX_ATTEMPTS:
-        locked_until = (datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
+        locked_until = (now_pht() + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
         users_col.update_one(
             {"_id": user["_id"]},
             {"$set": {"failed_attempts": attempts, "locked_until": locked_until}}
@@ -143,7 +146,7 @@ def login():
             record_failed_attempt(user)
             users_col.update_one(
                 {"_id": user["_id"]},
-                {"$set": {"last_failed_login": datetime.utcnow().isoformat()}}
+                {"$set": {"last_failed_login": now_pht().isoformat()}}
             )
             attempts_left = MAX_ATTEMPTS - user.get("failed_attempts", 0) - 1
             if attempts_left <= 0:
@@ -153,7 +156,7 @@ def login():
         prev_last_login        = user.get("last_login")
         prev_last_failed_login = user.get("last_failed_login")
 
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = now_pht().isoformat()
         users_col.update_one(
             {"_id": user["_id"]},
             {"$unset": {"failed_attempts": "", "locked_until": ""},
@@ -213,7 +216,7 @@ def create_user():
         "role":       data["role"],
         "department": data.get("department", "General"),
         "email":      data.get("email", ""),
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": now_pht().isoformat(),
         "password_changed_at": None,
         "password_history": [hashed_pw],
         "security_question": None,
@@ -257,7 +260,7 @@ def delete_user(user_id):
 def time_in():
     try:
         user_id = get_jwt_identity()
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = now_pht().strftime("%Y-%m-%d")
         existing = attendance_col.find_one({
             "user_id": user_id,
             "date": today
@@ -266,7 +269,7 @@ def time_in():
             return jsonify({"error": "Already timed in today"}), 400
         if existing and existing.get("time_out"):
             return jsonify({"error": "Attendance already completed today"}), 400
-        now = datetime.utcnow().isoformat()
+        now = now_pht().isoformat()
         if existing:
             attendance_col.update_one(
                 {"_id": existing["_id"]},
@@ -295,7 +298,7 @@ def time_in():
 def time_out():
     try:
         user_id = get_jwt_identity()
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = now_pht().strftime("%Y-%m-%d")
         record = attendance_col.find_one({
             "user_id": user_id,
             "date": today
@@ -305,11 +308,10 @@ def time_out():
         if record.get("time_out"):
             return jsonify({"error": "Already timed out today"}), 400
         
-        now = datetime.utcnow()
+        now = now_pht()
         time_in_dt = datetime.fromisoformat(record["time_in"])
-        hours = (now - time_in_dt).total_seconds() / 3600
+        hours = (now - time_in_dt).total_seconds() / 3600 # can be changed to smaller value for testing, 600 per minute
 
-        # ── Range validation ──────────────────────────────────────────
         if hours < 0:
             log_action(user_id, "VALIDATION_FAILURE", "time_out before time_in")
             return jsonify({"error": "Invalid time calculation"}), 400
@@ -319,9 +321,10 @@ def time_out():
         if hours > 24:
             log_action(user_id, "VALIDATION_FAILURE", f"Shift too long: {hours:.2f}h")
             return jsonify({"error": "Shift duration exceeds 24 hours. Please contact HR."}), 400
-        # ─────────────────────────────────────────────────────────────
 
         overtime = max(0, hours - 8)
+        if overtime > hours:
+            overtime = 0
         attendance_col.update_one(
             {"_id": record["_id"]},
             {"$set": {
@@ -373,7 +376,7 @@ def submit_leave():
             return jsonify({"error": "Missing required fields"}), 400
         if data["end_date"] < data["start_date"]:
             return jsonify({"error": "End date cannot be before start date"}), 400
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = now_pht().strftime("%Y-%m-%d")
         if data["start_date"] < today:
             return jsonify({"error": "Cannot file leave in the past"}), 400
         leave = {
@@ -385,7 +388,7 @@ def submit_leave():
             "status": "pending",
             "reviewed_by": None,
             "reviewed_at": None,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": now_pht().isoformat()
         }
         result = leave_col.insert_one(leave)
         log_action(user_id, "SUBMIT_LEAVE", data["leave_type"])
@@ -439,7 +442,7 @@ def review_leave(leave_id):
             {"$set": {
                 "status": data["status"],
                 "reviewed_by": reviewer_id, 
-                "reviewed_at": datetime.utcnow().isoformat()
+                "reviewed_at": now_pht().isoformat()
             }}
         )
         log_action(reviewer_id, "REVIEW_LEAVE", f"{leave_id}:{data['status']}")
@@ -456,7 +459,7 @@ def review_leave(leave_id):
 def summary_report():
     total_users   = users_col.count_documents({})
     pending_leave = leave_col.count_documents({"status": "pending"})
-    today         = datetime.utcnow().strftime("%Y-%m-%d")
+    today         = now_pht().strftime("%Y-%m-%d")
     present_today = attendance_col.count_documents({"date": today, "time_in": {"$ne": None}})
     ot_agg        = list(attendance_col.aggregate([{"$group": {"_id": None, "total": {"$sum": "$overtime_hours"}}}]))
     ot_hours      = ot_agg[0]["total"] if ot_agg else 0
@@ -580,7 +583,7 @@ def change_password():
         changed_at_str = user.get("password_changed_at")
         if changed_at_str:
             changed_at = datetime.fromisoformat(changed_at_str)
-            age_hours  = (datetime.utcnow() - changed_at).total_seconds() / 3600
+            age_hours  = (now_pht() - changed_at).total_seconds() / 3600
             if age_hours < PASSWORD_MIN_AGE_HOURS:
                 hours_left = int(PASSWORD_MIN_AGE_HOURS - age_hours) + 1
                 return jsonify({"error": f"Password is too new. Please wait {hours_left} more hour(s) before changing again."}), 400
@@ -598,7 +601,7 @@ def change_password():
 
         new_hash    = hash_pw(new_pw)
         new_history = (history + [new_hash])[-PASSWORD_HISTORY_DEPTH:]
-        now_iso     = datetime.utcnow().isoformat()
+        now_iso     = now_pht().isoformat()
 
         users_col.update_one(
             {"_id": ObjectId(user_id)},
