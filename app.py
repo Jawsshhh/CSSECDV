@@ -290,21 +290,37 @@ def update_user(user_id):
 @jwt_required()
 @require_role("admin")
 def delete_user(user_id):
-    caller_id = get_jwt_identity()
-    
-    # 1. Prevent self-deletion
-    if user_id == caller_id:
-        return jsonify({"error": "Security violation: You cannot delete your own account."}), 403
-        
-    # 2. Prevent deleting the last admin
-    target = users_col.find_one({"_id": ObjectId(user_id)})
-    if target and target.get("role") == "admin":
-        if users_col.count_documents({"role": "admin"}) <= 1:
-            return jsonify({"error": "Cannot delete the last remaining admin."}), 403
+    try:
+        caller_id = get_jwt_identity()
+        data = request.json or {}
+        reauth_password = data.get("reauth_password", "")
 
-    users_col.delete_one({"_id": ObjectId(user_id)})
-    log_action(caller_id, "DELETE_USER", str(user_id))
-    return jsonify({"message": "User deleted"})
+        # 1. Fetch Admin (Caller) for Re-authentication
+        caller = users_col.find_one({"_id": ObjectId(caller_id)})
+        if not reauth_password or not check_pw(reauth_password, caller["password"]):
+            log_action(caller_id, "DELETE_USER_FAIL", f"Reauth failed for deleting {user_id}")
+            return jsonify({"error": "Incorrect password. Re-authentication failed."}), 401
+
+        # 2. Prevent self-deletion
+        if user_id == caller_id:
+            return jsonify({"error": "Security violation: You cannot delete your own account."}), 403
+            
+        # 3. Prevent deleting the last admin
+        target = users_col.find_one({"_id": ObjectId(user_id)})
+        if not target:
+            return jsonify({"error": "User not found"}), 404
+            
+        if target.get("role") == "admin":
+            if users_col.count_documents({"role": "admin"}) <= 1:
+                return jsonify({"error": "Cannot delete the last remaining admin."}), 403
+
+        users_col.delete_one({"_id": ObjectId(user_id)})
+        log_action(caller_id, "DELETE_USER", f"Target: {target.get('username')} ({user_id})")
+        return jsonify({"message": f"User {target.get('username')} deleted successfully."})
+        
+    except Exception as e:
+        log_action("system", "DELETE_USER_ERROR", str(e))
+        return jsonify({"error": "Failed to delete user"}), 500
 
 # Attendance routes
 @app.route("/api/attendance/timein", methods=["POST"])

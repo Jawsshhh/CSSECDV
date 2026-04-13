@@ -885,10 +885,9 @@
         const opts = { method, headers };
         if (body) opts.body = JSON.stringify(body);
         const r = await fetch(API + path, opts);
-        const isReauthEndpoint =
-          path === "/api/login" ||
-          path.includes("/review") ||
-          (path.startsWith("/api/users/") && method === "PUT");
+        const isReauthEndpoint = path === '/api/login'
+        || path.includes('/review')
+        || (path.startsWith('/api/users/') && (method === 'PUT' || method === 'DELETE'));
         if (r.status === 401 && !isReauthEndpoint) {
           doLogout();
           toast("Session expired. Please log in again.", "error");
@@ -1436,10 +1435,26 @@
       }
 
       async function deleteUser(id, name) {
-        if (!confirm(`Delete user "${name}"?`)) return;
-        await api(`/api/users/${id}`, "DELETE");
-        toast(`🗑️ Deleted ${name}`);
-        loadUsers();
+        // First, a standard confirmation to prevent accidental clicks
+        if (!confirm(`Are you absolutely sure you want to delete user "${name}"? This action cannot be undone.`)) return;
+
+        // Use the existing reauth modal logic
+        promptReauth(
+          `Security Check: Enter your admin password to confirm the deletion of user "${name}".`,
+          async (password) => {
+            const res = await api(`/api/users/${id}`, 'DELETE', {
+              reauth_password: password
+            });
+
+            if (res.error) {
+              toast(res.error, 'error');
+              return;
+            }
+
+            toast(`🗑️ Successfully deleted ${name}`);
+            loadUsers(); // Refresh the table
+          }
+        );
       }
 
       // ── ADMIN: LOGS ───────────────────────────────────────────────────────────────
