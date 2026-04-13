@@ -20,6 +20,30 @@ CORS(app)
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET", "super-secret-fallback-key")
 jwt = JWTManager(app)
 
+@jwt.unauthorized_loader
+def unauthorized_response(callback):
+    path = request.path
+    # Log the failure for the audit trail
+    log_action("anonymous", "AUTHENTICATION_FAILURE", f"Missing token for {path}")
+
+    return jsonify({
+        "error": "unauthorized",
+        "message": "Missing Authorization Header"
+    }), 401
+
+@jwt.expired_token_loader
+def expired_token_response(jwt_header, jwt_payload):
+
+    path = request.path
+    user_id = jwt_payload.get("sub", "unknown")
+
+    log_action(user_id, "AUTHENTICATION_FAILURE", f"Expired token for {path}")
+
+    return jsonify({
+        "error": "token_expired",
+        "message": "Your session has expired. Please log in again."
+    }), 401
+
 uri = os.getenv("MONGO_DB_URI")
 client = MongoClient(uri, server_api=ServerApi('1'))
 db = client["hr_logging_system"]
@@ -202,22 +226,31 @@ def get_users():
 @require_role("admin")
 def create_user():
     data = request.json
-    if not data.get("full_name", "").strip():
-        return jsonify({"error": "Full name is required."}), 400 #Validate length
-    if not data.get("username", "").strip():
-        return jsonify({"error": "Username is required."}), 400 #Validate length
-    if data.get("role") not in VALID_ROLES:
-        return jsonify({"error": "Invalid role. Must be admin, hr, or employee."}), 400
-    #include email validation, email uniqueness check, must have email
+
+    if not data.get("full_name", "").strip() or not _validate_name(data["full_name"]):
+        return jsonify({"error": "Full name is required."}), 400 
+
+    if not data.get("username", "").strip() or not _validate_username(data["username"]):
+        return jsonify({"error": "Valid username is required."}), 400 
+    if users_col.find_one({"username": data["username"]}):
+        return jsonify({"error": "Username already exists"}), 400
+
+    if not data.get("email", "").strip() or not _validate_email(data["email"]):
+        return jsonify({"error": "Valid email is required."}), 400
+    if users_col.find_one({"email": data["email"]}):
+        return jsonify({"error": "Email already in use."}), 400
+
     err = _validate_new_password(data.get("password", ""))
     if err:
         return jsonify({"error": err}), 400
-    if users_col.find_one({"username": data["username"]}):
-        return jsonify({"error": "Username already exists"}), 400
-    # Inside create_user function
+
+    if data.get("role") not in VALID_ROLES:
+        return jsonify({"error": "Invalid role. Must be Admin, HR, or Employee."}), 400
+   
     dept = data.get("department", "Engineering").strip()
     if dept not in VALID_DEPARTMENTS:
         return jsonify({"error": f"Invalid department. Must be one of: {', '.join(VALID_DEPARTMENTS)}"}), 400
+    
     hashed_pw = hash_pw(data["password"])
     user = {
         "username":   data["username"],
@@ -234,6 +267,7 @@ def create_user():
         "last_login": None,
         "last_failed_login": None
     }
+
     result = users_col.insert_one(user)
     log_action(data.get("admin_id", "system"), "CREATE_USER", data["username"])
     return jsonify({"message": "User created", "id": str(result.inserted_id)}), 201
@@ -253,7 +287,6 @@ def update_user(user_id):
         if not target:
             return jsonify({"error": "User not found"}), 404
         
- 
         # Build safe update — strip internal/auth fields
         PROTECTED = {"_id", "password", "password_history", "password_changed_at",
                      "security_question", "security_answer_hash", "created_at",
@@ -268,7 +301,11 @@ def update_user(user_id):
         if "username" in update and update["username"] != target["username"]:
             if users_col.find_one({"username": update["username"]}):
                 return jsonify({"error": "Username already taken."}), 400
-            
+        
+        if "email" in update and update["email"] != target.get("email"):
+            if users_col.find_one({"email": update["email"]}):
+                return jsonify({"error": "Email already in use."}), 400
+
         if "department" in update:
             if update["department"] not in VALID_DEPARTMENTS:
                 return jsonify({"error": "Invalid department selection."}), 400    
@@ -294,6 +331,7 @@ def update_user(user_id):
  
         users_col.update_one({"_id": ObjectId(user_id)}, {"$set": update})
         log_action(caller_id, "UPDATE_USER", f"target={user_id} fields={list(update.keys())}")
+        
         return jsonify({"message": "User updated"})
     except Exception as e:
         log_action("system", "UPDATE_USER_ERROR", str(e))
@@ -641,6 +679,19 @@ def get_security_question(user_id):
         return jsonify({"error": "User not found"}), 404
     return jsonify({"security_question": user.get("security_question")})
 
+# ─── INPUT VALIDATION ──────────────────────────────────────────────────────────
+
+def _validate_email(email: str):
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    return re.match(email_regex, email) is not None
+
+def _validate_name(name: str):
+    name_regex = r'^[a-zA-Z]{3,100}'
+    return re.match(name_regex, name) is not None
+
+def _validate_usernamee(username: str):
+    username_regex = r'^[a-zA-Z0-9_]{3,30}'
+    return re.match(username_regex, username) is not None
 
 # ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
 

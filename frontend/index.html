@@ -895,9 +895,11 @@
         const opts = { method, headers };
         if (body) opts.body = JSON.stringify(body);
         const r = await fetch(API + path, opts);
-        const isReauthEndpoint = path === '/api/login'
-        || path.includes('/review')
-        || (path.startsWith('/api/users/') && (method === 'PUT' || method === 'DELETE'));
+        const isReauthEndpoint =
+          path === "/api/login" ||
+          path.includes("/review") ||
+          (path.startsWith("/api/users/") &&
+            (method === "PUT" || method === "DELETE"));
         if (r.status === 401 && !isReauthEndpoint) {
           doLogout();
           toast("Session expired. Please log in again.", "error");
@@ -910,6 +912,48 @@
 
         return r.json();
       }
+      // ── INPUT VALIDATION ────────────────────────────────────────────────────────────────────
+      function validateInput() {
+        const name = document.getElementById("u-name").value.trim();
+        const username = document.getElementById("u-username").value.trim();
+        const email = document.getElementById("u-email").value.trim();
+        const password = document.getElementById("u-password").value.trim();
+
+        const namePattern = /^[a-zA-Z]{3,100}$/;
+        const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/; // Only letters, numbers, and underscores allowed
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const passwordPattern =
+          /^((?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?!= )).{8,}$/;
+
+        if (!username || !usernamePattern.test(username)) {
+          alert(
+            "Invalid username. It should only contain letters, numbers, and underscores.",
+          );
+          return false;
+        }
+
+        if (!email || !emailPattern.test(email)) {
+          alert("Invalid email format.");
+          return false;
+        }
+
+        if (!password || !passwordPattern.test(password)) {
+          alert(
+            "Password must be at least 8 characters long, contain uppercase, lowercase, numbers, and special characters.",
+          );
+          return false;
+        }
+
+        return true;
+      }
+
+      document
+        .querySelector(".btn-primary")
+        .addEventListener("click", function () {
+          if (validateInput()) {
+            saveUser(); // Only proceed if the validation is successful
+          }
+        });
 
       // ── AUTH ─────────────────────────────────────────────────────────────────────
       async function doLogin() {
@@ -1446,24 +1490,29 @@
 
       async function deleteUser(id, name) {
         // First, a standard confirmation to prevent accidental clicks
-        if (!confirm(`Are you absolutely sure you want to delete user "${name}"? This action cannot be undone.`)) return;
+        if (
+          !confirm(
+            `Are you absolutely sure you want to delete user "${name}"? This action cannot be undone.`,
+          )
+        )
+          return;
 
         // Use the existing reauth modal logic
         promptReauth(
           `Security Check: Enter your admin password to confirm the deletion of user "${name}".`,
           async (password) => {
-            const res = await api(`/api/users/${id}`, 'DELETE', {
-              reauth_password: password
+            const res = await api(`/api/users/${id}`, "DELETE", {
+              reauth_password: password,
             });
 
             if (res.error) {
-              toast(res.error, 'error');
+              toast(res.error, "error");
               return;
             }
 
             toast(`🗑️ Successfully deleted ${name}`);
             loadUsers(); // Refresh the table
-          }
+          },
         );
       }
 
