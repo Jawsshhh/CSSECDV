@@ -822,6 +822,59 @@ tr:hover td { background: rgba(255,255,255,0.015); }
   </div>
 </div>
 
+<!-- ── Edit User Modal ── -->
+<div class="modal-overlay" id="modal-edit-user">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit User</div>
+    <input type="hidden" id="eu-id"/>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Full Name</label>
+        <input class="form-input" id="eu-name" placeholder="Full Name"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Username</label>
+        <input class="form-input" id="eu-username" placeholder="username"/>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Role</label>
+        <select class="form-select" id="eu-role">
+          <option value="employee">Employee</option>
+          <option value="hr">HR Staff</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Department</label>
+        <input class="form-input" id="eu-dept" placeholder="e.g. Engineering"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Email</label>
+      <input class="form-input" id="eu-email" placeholder="email@company.com"/>
+    </div>
+    <hr style="border-color:var(--border);margin:8px 0 16px"/>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Reset Password <span style="color:var(--border);font-size:10px">(optional)</span></div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">New Password</label>
+        <input class="form-input" type="password" id="eu-new-password" placeholder="Leave blank to keep current" autocomplete="new-password"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Confirm Password</label>
+        <input class="form-input" type="password" id="eu-confirm-password" placeholder="Repeat new password" autocomplete="new-password"/>
+      </div>
+    </div>
+    <div id="eu-error" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:4px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-user')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditUser()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Reauth Modal ── -->
 <div class="modal-overlay" id="modal-reauth">
   <div class="modal">
@@ -883,7 +936,10 @@ async function api(path, method = 'GET', body = null) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
-  if (r.status === 401 && path !== '/api/login' && !path.includes('/review')) {
+  const isReauthEndpoint = path === '/api/login'
+    || path.includes('/review')
+    || (path.startsWith('/api/users/') && method === 'PUT');
+  if (r.status === 401 && !isReauthEndpoint) {
       doLogout();
       toast("Session expired. Please log in again.", "error");
       return { error: "Unauthorized" };
@@ -1210,20 +1266,38 @@ async function loadHRReports() {
 }
 
 // ── ADMIN: USERS ──────────────────────────────────────────────────────────────
+let _userMap = {};
 async function loadUsers() {
   const users = await api('/api/users');
+  _userMap = {};
+  users.forEach(u => _userMap[u._id] = u);
   const tbody = $('users-tbody');
-  tbody.innerHTML = users.map(u => `<tr>
-    <td>${u.full_name}</td>
-    <td><code>${u.username}</code></td>
-    <td><span class="badge badge-${u.role}">${u.role}</span></td>
-    <td>${u.department||'—'}</td>
-    <td>${u.email||'—'}</td>
-    <td>${fmtDate(u.created_at)}</td>
-    <td>
-      <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}','${u.username}')">Delete</button>
-    </td>
-  </tr>`).join('');
+  
+  tbody.innerHTML = users.map(u => {
+    // Check if the user in this row is the one currently logged in
+    const isSelf = u._id === currentUser._id;
+    
+    return `<tr>
+      <td>${u.full_name}</td>
+      <td><code>${u.username}</code></td>
+      <td><span class="badge badge-${u.role}">${u.role}</span></td>
+      <td>${u.department||'—'}</td>
+      <td>${u.email||'—'}</td>
+      <td>${fmtDate(u.created_at)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" 
+                onclick="openEditUserModal('${u._id}')" 
+                ${isSelf ? 'disabled title="Edit via My Profile page"' : ''}>
+          Edit
+        </button>
+        <button class="btn btn-danger btn-sm" 
+                onclick="deleteUser('${u._id}','${u.username}')" 
+                ${isSelf ? 'style="display:none"' : ''}>
+          Delete
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 function openUserModal() { openModal('modal-user'); }
 async function saveUser() {
@@ -1241,6 +1315,83 @@ async function saveUser() {
   closeModal('modal-user');
   loadUsers();
 }
+function openEditUserModal(id) {
+  const targetId = String(id).trim();
+  const currentId = String(currentUser._id).trim();
+
+  if (targetId === currentId) {
+    // This triggers your existing toast function
+    toast('Please use the "My Profile" page to update your own information.', 'error');
+    return;
+  }
+
+  const u = _userMap[id];
+  if (!u) { 
+    toast('User not found', 'error'); 
+    return; 
+  }
+  $('eu-id').value          = u._id;
+  $('eu-name').value        = u.full_name || '';
+  $('eu-username').value    = u.username  || '';
+  $('eu-role').value        = u.role      || 'employee';
+  $('eu-dept').value        = u.department|| '';
+  $('eu-email').value       = u.email     || '';
+  $('eu-new-password').value     = '';
+  $('eu-confirm-password').value = '';
+  $('eu-error').textContent      = '';
+  openModal('modal-edit-user');
+}
+
+async function submitEditUser() {
+  $('eu-error').textContent = '';
+  const id       = $('eu-id').value;
+  const newPw    = $('eu-new-password').value;
+  const confirmPw= $('eu-confirm-password').value;
+
+  if (newPw && newPw !== confirmPw) {
+    $('eu-error').textContent = 'Passwords do not match.';
+    return;
+  }
+
+  const payload = {
+    full_name:  $('eu-name').value.trim(),
+    username:   $('eu-username').value.trim(),
+    role:       $('eu-role').value,
+    department: $('eu-dept').value.trim(),
+    email:      $('eu-email').value.trim(),
+  };
+
+  if (newPw) {
+    // Require admin reauth before sending password change
+    closeModal('modal-edit-user');
+    promptReauth(
+      `You are resetting the password for "${payload.full_name}". Enter your own admin password to confirm.`,
+      async (adminPassword) => {
+        const res = await api(`/api/users/${id}`, 'PUT', {
+          ...payload,
+          new_password:   newPw,
+          admin_password: adminPassword,
+        });
+        if (res.error) {
+          // Re-open edit modal with error
+          openModal('modal-edit-user');
+          $('eu-error').textContent = res.error;
+          return;
+        }
+        toast('✅ User updated & password reset');
+        loadUsers();
+      }
+    );
+    return;
+  }
+
+  const res = await api(`/api/users/${id}`, 'PUT', payload);
+  if (res.error) { $('eu-error').textContent = res.error; return; }
+  toast('✅ User updated');
+  closeModal('modal-edit-user');
+  loadUsers();
+}
+
 async function deleteUser(id, name) {
   if (!confirm(`Delete user "${name}"?`)) return;
   await api(`/api/users/${id}`, 'DELETE');

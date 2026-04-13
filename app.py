@@ -199,11 +199,12 @@ def get_users():
 def create_user():
     data = request.json
     if not data.get("full_name", "").strip():
-        return jsonify({"error": "Full name is required."}), 400
+        return jsonify({"error": "Full name is required."}), 400 #Validate length
     if not data.get("username", "").strip():
-        return jsonify({"error": "Username is required."}), 400
+        return jsonify({"error": "Username is required."}), 400 #Validate length
     if data.get("role") not in VALID_ROLES:
         return jsonify({"error": "Invalid role. Must be admin, hr, or employee."}), 400
+    #include email validation, email uniqueness check, must have email
     err = _validate_new_password(data.get("password", ""))
     if err:
         return jsonify({"error": err}), 400
@@ -233,24 +234,75 @@ def create_user():
 @jwt_required()
 @require_role("admin")
 def update_user(user_id):
-    data = request.json
-    update = {k: v for k, v in data.items() if k not in ("_id", "password")}
-    if "new_password" in data:
-        update["password"] = hash_pw(data["new_password"])
-    users_col.update_one({"_id": ObjectId(user_id)}, {"$set": update})
-    return jsonify({"message": "User updated"})
+    try:
+        caller_id = get_jwt_identity()
+        data = request.json
 
+        if user_id == caller_id:
+            return jsonify({"error": "Please use the 'My Profile' page to update your own information."}), 403
+ 
+        target = users_col.find_one({"_id": ObjectId(user_id)})
+        if not target:
+            return jsonify({"error": "User not found"}), 404
+        
+ 
+        # Build safe update — strip internal/auth fields
+        PROTECTED = {"_id", "password", "password_history", "password_changed_at",
+                     "security_question", "security_answer_hash", "created_at",
+                     "last_login", "last_failed_login", "failed_attempts", "locked_until"}
+        update = {k: v for k, v in data.items() if k not in PROTECTED}
+ 
+        # Validate role if being changed
+        if "role" in update and update["role"] not in VALID_ROLES:
+            return jsonify({"error": "Invalid role."}), 400
+ 
+        # Validate username uniqueness if being changed
+        if "username" in update and update["username"] != target["username"]:
+            if users_col.find_one({"username": update["username"]}):
+                return jsonify({"error": "Username already taken."}), 400
+ 
+        # Password change requires admin reauth
+        if "new_password" in data:
+            admin_password = data.get("admin_password", "")
+            caller = users_col.find_one({"_id": ObjectId(caller_id)})
+            if not caller or not check_pw(admin_password, caller["password"]):
+                log_action(caller_id, "UPDATE_USER_FAIL", f"Bad reauth for password change on {user_id}")
+                return jsonify({"error": "Incorrect admin password. Re-authentication failed."}), 401
+ 
+            err = _validate_new_password(data["new_password"])
+            if err:
+                return jsonify({"error": err}), 400
+ 
+            new_hash = hash_pw(data["new_password"])
+            history  = target.get("password_history", [target["password"]])
+            update["password"]            = new_hash
+            update["password_changed_at"] = now_pht().isoformat()
+            update["password_history"]    = (history + [new_hash])[-PASSWORD_HISTORY_DEPTH:]
+            log_action(caller_id, "ADMIN_RESET_PASSWORD", f"target={user_id}")
+ 
+        users_col.update_one({"_id": ObjectId(user_id)}, {"$set": update})
+        log_action(caller_id, "UPDATE_USER", f"target={user_id} fields={list(update.keys())}")
+        return jsonify({"message": "User updated"})
+    except Exception as e:
+        log_action("system", "UPDATE_USER_ERROR", str(e))
+        return jsonify({"error": "Failed to update user"}), 500
+ 
 @app.route("/api/users/<user_id>", methods=["DELETE"])
 @jwt_required()
 @require_role("admin")
 def delete_user(user_id):
     caller_id = get_jwt_identity()
+    
+    # 1. Prevent self-deletion
     if user_id == caller_id:
-        return jsonify({"error": "You cannot delete your own account."}), 403
+        return jsonify({"error": "Security violation: You cannot delete your own account."}), 403
+        
+    # 2. Prevent deleting the last admin
     target = users_col.find_one({"_id": ObjectId(user_id)})
     if target and target.get("role") == "admin":
         if users_col.count_documents({"role": "admin"}) <= 1:
-            return jsonify({"error": "Cannot delete the last admin account."}), 403
+            return jsonify({"error": "Cannot delete the last remaining admin."}), 403
+
     users_col.delete_one({"_id": ObjectId(user_id)})
     log_action(caller_id, "DELETE_USER", str(user_id))
     return jsonify({"message": "User deleted"})
