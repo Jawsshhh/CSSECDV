@@ -417,7 +417,6 @@ def get_my_leave(user_id):
 def get_all_leave():
     records = list(leave_col.find({}).sort("created_at", -1))
     enriched = []
-    # In app.py -> get_all_leave()
     for r in records:
         user = users_col.find_one({"_id": ObjectId(r["user_id"])}, {"full_name": 1, "department": 1, "role": 1}) # Add "role": 1 here
         r["full_name"] = user["full_name"] if user else r["user_id"]
@@ -452,21 +451,17 @@ def review_leave(leave_id):
         if data.get("status") not in ["approved", "rejected"]:
             return jsonify({"error": "Invalid status"}), 400
 
-        # Get the leave owner's role
         leave_owner = users_col.find_one({"_id": ObjectId(leave["user_id"])})
         leave_owner_role = leave_owner.get("role") if leave_owner else None
 
-        # Rule: Admin cannot review their own leave
         if leave["user_id"] == reviewer_id:
             log_action(reviewer_id, "ACCESS_DENIED", f"Tried to review own leave {leave_id}")
             return jsonify({"error": "You cannot approve or reject your own leave."}), 403
 
-        # Rule: HR can only review employee leaves
         if reviewer_role == "hr" and leave_owner_role != "employee":
             log_action(reviewer_id, "ACCESS_DENIED", f"HR tried to review {leave_owner_role} leave {leave_id}")
             return jsonify({"error": "HR can only review employee leave requests."}), 403
 
-        # Rule: Only admin can review HR or admin leaves
         if reviewer_role == "hr" and leave_owner_role in ("hr", "admin"):
             log_action(reviewer_id, "ACCESS_DENIED", f"HR tried to review {leave_owner_role} leave {leave_id}")
             return jsonify({"error": "Only an admin can review this leave request."}), 403
