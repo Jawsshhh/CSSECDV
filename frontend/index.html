@@ -1013,54 +1013,6 @@
         loadUsers();
       }
 
-      // ── Edit user ─────────────────────────────────────────────────────────────────
-      async function submitEditUser() {
-        const valid = validateUserFields(
-          {
-            name: "eu-name",
-            username: "eu-username",
-            email: "eu-email",
-            password: "eu-new-password",
-            confirm: "eu-confirm-password",
-            error: "eu-error",
-          },
-          true,
-        );
-
-        if (!valid) return; // stops here — modal stays open with error shown
-
-        const id = $("eu-id").value;
-        const newPw = $("eu-new-password").value.trim();
-        const payload = {
-          full_name: $("eu-name").value.trim(),
-          username: $("eu-username").value.trim(),
-          role: $("eu-role").value,
-          department: $("eu-dept").value.trim(),
-          email: $("eu-email").value.trim(),
-        };
-        if (newPw) payload.password = newPw;
-
-        // ... rest of your existing submitEditUser API call
-      }
-
-      // ── Edit user ─────────────────────────────────────────────────────────────────
-      document
-        .querySelector("#modal-edit-user .btn-primary")
-        .addEventListener("click", function () {
-          const valid = validateUserFields(
-            {
-              name: "eu-name",
-              username: "eu-username",
-              email: "eu-email",
-              password: "eu-new-password",
-              confirm: "eu-confirm-password",
-            },
-            true,
-          ); // isEdit = true → password optional
-
-          if (valid) submitEditUser();
-        });
-
       // ── AUTH ─────────────────────────────────────────────────────────────────────
       async function doLogin() {
         const username = $("login-user").value.trim();
@@ -1542,6 +1494,20 @@
       }
 
       async function submitEditUser() {
+        const valid = validateUserFields(
+          {
+            name: "eu-name",
+            username: "eu-username",
+            email: "eu-email",
+            password: "eu-new-password",
+            confirm: "eu-confirm-password",
+            error: "eu-error",
+          },
+          true,
+        );
+
+        if (!valid) return;
+        
         $("eu-error").textContent = "";
         const id = $("eu-id").value;
         const newPw = $("eu-new-password").value;

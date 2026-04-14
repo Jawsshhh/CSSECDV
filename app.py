@@ -236,6 +236,7 @@ def get_users():
 @require_role("admin")
 def create_user():
     data = request.json
+    user_id = get_jwt_identity()
 
     if not data.get("full_name", "").strip() or not _validate_name(data["full_name"]):
         log_action("system", "USER_CREATION_FAIL", f"Invalid full name for user {user_id}")
