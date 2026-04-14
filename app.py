@@ -238,26 +238,26 @@ def create_user():
     data = request.json
 
     if not data.get("full_name", "").strip() or not _validate_name(data["full_name"]):
-        log_action("system", "USER_CREATION_FAIL", f"Invalid full name: {data.get('full_name')}")
+        log_action("system", "USER_CREATION_FAIL", f"Invalid full name for user {user_id}")
         return jsonify({"error": "Full name is required."}), 400 
 
     if not data.get("username", "").strip() or not _validate_username(data["username"]):
-        log_action("system", "USER_CREATION_FAIL", f"Invalid username: {data.get('username')}")
+        log_action("system", "USER_CREATION_FAIL", f"Invalid username for user {user_id}")
         return jsonify({"error": "Valid username is required."}), 400 
     if users_col.find_one({"username": data["username"]}):
-        log_action("system", "USER_CREATION_FAIL", f"Username already exists: {data.get('username')}")
+        log_action("system", "USER_CREATION_FAIL", f"Username already exists for user {user_id}")
         return jsonify({"error": "Username already exists"}), 400
 
     if not data.get("email", "").strip() or not _validate_email(data["email"]):
-        log_action("system", "USER_CREATION_FAIL", f"Invalid email: {data.get('email')}")
+        log_action("system", "USER_CREATION_FAIL", f"Invalid email for user {user_id}")
         return jsonify({"error": "Valid email is required."}), 400
     if users_col.find_one({"email": data["email"]}):
-        log_action("system", "USER_CREATION_FAIL", f"Email already in use: {data.get('email')}")
+        log_action("system", "USER_CREATION_FAIL", f"Email already in use for user {user_id}")
         return jsonify({"error": "Email already in use."}), 400
 
     err = _validate_new_password(data.get("password", ""))
     if err:
-        log_action("system", "USER_CREATION_FAIL", f"Invalid password: {data.get('password')}")
+        log_action("system", "USER_CREATION_FAIL", f"Invalid password for user {user_id}")
         return jsonify({"error": err}), 400
 
     if data.get("role") not in VALID_ROLES:
@@ -315,29 +315,34 @@ def update_user(user_id):
  
         # Validate role if being changed
         if "role" in update and update["role"] not in VALID_ROLES:
-            log_action(caller_id, "USER_UPDATE_FAIL", f"Invalid role for user {user_id}: {data.get('role')}")
+            log_action(caller_id, "USER_UPDATE_FAIL", f"Invalid role for user {user_id}.")
             return jsonify({"error": "Invalid role."}), 400
+
+        if "name" in update and update["name"] != target["name"]:
+            if not _validate_name(update["name"]):
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid name for user {user_id}")
+                return jsonify({"error": "Valid name is required."}), 400
  
         # Validate username uniqueness if being changed
         if "username" in update and update["username"] != target["username"]:
             if not _validate_username(update["username"]):
-                log_action("system", "USER_UPDATE_FAIL", f"Invalid username: {data.get('username')}")
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid username for user {user_id}")
                 return jsonify({"error": "Valid username is required."}), 400 
             if users_col.find_one({"username": update["username"]}):
-                log_action(caller_id, "USER_UPDATE_FAIL", f"Username already taken: {data.get('username')}")
+                log_action(caller_id, "USER_UPDATE_FAIL", f"Username already taken for user {user_id}")
                 return jsonify({"error": "Username already taken."}), 400
         
         if "email" in update and update["email"] != target.get("email"):
             if not _validate_email(update["email"]):
-                log_action("system", "USER_UPDATE_FAIL", f"Invalid email: {data.get('email')}")
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid email for user {user_id}")
                 return jsonify({"error": "Valid email is required."}), 400
             if users_col.find_one({"email": update["email"]}):
-                log_action("system", "USER_UPDATE_FAIL", f"Email already in use: {data.get('email')}")
+                log_action("system", "USER_UPDATE_FAIL", f"Email already in use for user {user_id}")
                 return jsonify({"error": "Email already in use."}), 400
 
         if "department" in update:
             if update["department"] not in VALID_DEPARTMENTS:
-                log_action("system", "USER_UPDATE_FAIL", f"Invalid department: {dept}")
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid department for user {user_id}")
                 return jsonify({"error": "Invalid department selection."}), 400    
  
         # Password change requires admin reauth
@@ -350,7 +355,7 @@ def update_user(user_id):
  
             err = _validate_new_password(data["new_password"])
             if err:
-                log_action("system", "USER_UPDATE_FAIL", f"Invalid password: {data.get('password')}")
+                log_action("system", "USER_UPDATE_FAIL", f"Invalid password for user {user_id}")
                 return jsonify({"error": err}), 400
  
             new_hash = hash_pw(data["new_password"])
@@ -727,7 +732,7 @@ def _validate_name(name: str):
     name_regex = r'^[a-zA-Z]{3,100}'
     return re.match(name_regex, name) is not None
 
-def _validate_usernamee(username: str):
+def _validate_username(username: str):
     username_regex = r'^[a-zA-Z0-9_]{3,30}'
     return re.match(username_regex, username) is not None
 
@@ -824,9 +829,4 @@ def index():
 if __name__ == "__main__": #remove before submission
     seed_defaults()
     print("\n🚀  HR System running → http://localhost:5000")
-    print("─────────────────────────────────────────")
-    print("  admin    / admin123     → Admin")
-    print("  hr_staff / hr123        → HR Staff")
-    print("  john_doe / employee123  → Employee")
-    print("─────────────────────────────────────────\n")
-    app.run(debug=True, port=5000) #change to false before submission
+    app.run(debug=False, port=5000) #change to false before submission

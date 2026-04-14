@@ -52,11 +52,6 @@
         </div>
         <button class="login-btn" onclick="doLogin()">Sign In →</button>
         <div class="login-error" id="login-err"></div>
-        <div class="login-hint">
-          <strong>admin</strong> / admin123 — System Admin<br />
-          <strong>hr_staff</strong> / hr123 — HR Manager<br />
-          <strong>john_doe</strong> / employee123 — Employee
-        </div>
       </div>
     </div>
 
@@ -453,6 +448,15 @@
             />
           </div>
         </div>
+        <div
+          id="u-error"
+          style="
+            color: var(--danger);
+            font-size: 12px;
+            min-height: 16px;
+            margin-bottom: 4px;
+          "
+        ></div>
         <div class="modal-actions">
           <button class="btn btn-ghost" onclick="closeModal('modal-user')">
             Cancel
@@ -913,46 +917,148 @@
         return r.json();
       }
       // ── INPUT VALIDATION ────────────────────────────────────────────────────────────────────
-      function validateInput() {
-        const name = document.getElementById("u-name").value.trim();
-        const username = document.getElementById("u-username").value.trim();
-        const email = document.getElementById("u-email").value.trim();
-        const password = document.getElementById("u-password").value.trim();
+      const PATTERNS = {
+        name: /^[a-zA-Z\s]{3,100}$/,
+        username: /^[a-zA-Z0-9_]{3,30}$/,
+        email: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+        password: /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*]).{8,}$/,
+      };
 
-        const namePattern = /^[a-zA-Z]{3,100}$/;
-        const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/; // Only letters, numbers, and underscores allowed
-        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-        const passwordPattern =
-          /^((?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?!= )).{8,}$/;
+      // Shows error inside the modal instead of alert()
+      function showModalError(errorId, message) {
+        const el = document.getElementById(errorId);
+        if (el) el.textContent = message;
+      }
 
-        if (!username || !usernamePattern.test(username)) {
-          alert(
-            "Invalid username. It should only contain letters, numbers, and underscores.",
+      function validateUserFields(ids, isEdit = false) {
+        const errorId = ids.error;
+        const name = document.getElementById(ids.name).value.trim();
+        const username = document.getElementById(ids.username).value.trim();
+        const email = document.getElementById(ids.email).value.trim();
+        const password = document.getElementById(ids.password).value.trim();
+        const confirm = ids.confirm
+          ? document.getElementById(ids.confirm).value.trim()
+          : null;
+
+        // Clear previous error
+        showModalError(errorId, "");
+
+        if (!name || !PATTERNS.name.test(name)) {
+          showModalError(
+            errorId,
+            "Invalid name. Must be at least 3 characters and contain only letters.",
           );
           return false;
         }
-
-        if (!email || !emailPattern.test(email)) {
-          alert("Invalid email format.");
+        if (!username || !PATTERNS.username.test(username)) {
+          showModalError(
+            errorId,
+            "Invalid username. Must be 3–30 characters using only letters, numbers, and underscores.",
+          );
+          return false;
+        }
+        if (!email || !PATTERNS.email.test(email)) {
+          showModalError(errorId, "Invalid email format.");
           return false;
         }
 
-        if (!password || !passwordPattern.test(password)) {
-          alert(
-            "Password must be at least 8 characters long, contain uppercase, lowercase, numbers, and special characters.",
-          );
-          return false;
+        // Password required on create; on edit only validate if something was typed
+        if (!isEdit || password.length > 0) {
+          if (!PATTERNS.password.test(password)) {
+            showModalError(
+              errorId,
+              "Password must be at least 8 characters with uppercase, lowercase, a number, and a special character.",
+            );
+            return false;
+          }
+          if (confirm !== null && password !== confirm) {
+            showModalError(errorId, "Passwords do not match.");
+            return false;
+          }
         }
 
         return true;
       }
 
+      // ── Create user ───────────────────────────────────────────────────────────────
+      async function saveUser() {
+        const valid = validateUserFields(
+          {
+            name: "u-name",
+            username: "u-username",
+            email: "u-email",
+            password: "u-password",
+            error: "u-error",
+          },
+          false,
+        );
+
+        if (!valid) return; // stops here — modal stays open with error shown
+
+        const res = await api("/api/users", "POST", {
+          full_name: $("u-name").value,
+          username: $("u-username").value,
+          password: $("u-password").value,
+          role: $("u-role").value,
+          department: $("u-dept").value,
+          email: $("u-email").value,
+          admin_id: currentUser._id,
+        });
+        if (res.error) {
+          showModalError("u-error", res.error);
+          return;
+        }
+        toast("✅ User created");
+        closeModal("modal-user");
+        loadUsers();
+      }
+
+      // ── Edit user ─────────────────────────────────────────────────────────────────
+      async function submitEditUser() {
+        const valid = validateUserFields(
+          {
+            name: "eu-name",
+            username: "eu-username",
+            email: "eu-email",
+            password: "eu-new-password",
+            confirm: "eu-confirm-password",
+            error: "eu-error",
+          },
+          true,
+        );
+
+        if (!valid) return; // stops here — modal stays open with error shown
+
+        const id = $("eu-id").value;
+        const newPw = $("eu-new-password").value.trim();
+        const payload = {
+          full_name: $("eu-name").value.trim(),
+          username: $("eu-username").value.trim(),
+          role: $("eu-role").value,
+          department: $("eu-dept").value.trim(),
+          email: $("eu-email").value.trim(),
+        };
+        if (newPw) payload.password = newPw;
+
+        // ... rest of your existing submitEditUser API call
+      }
+
+      // ── Edit user ─────────────────────────────────────────────────────────────────
       document
-        .querySelector(".btn-primary")
+        .querySelector("#modal-edit-user .btn-primary")
         .addEventListener("click", function () {
-          if (validateInput()) {
-            saveUser(); // Only proceed if the validation is successful
-          }
+          const valid = validateUserFields(
+            {
+              name: "eu-name",
+              username: "eu-username",
+              email: "eu-email",
+              password: "eu-new-password",
+              confirm: "eu-confirm-password",
+            },
+            true,
+          ); // isEdit = true → password optional
+
+          if (valid) submitEditUser();
         });
 
       // ── AUTH ─────────────────────────────────────────────────────────────────────
