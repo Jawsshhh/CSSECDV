@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from pymongo import MongoClient
@@ -25,11 +25,7 @@ def unauthorized_response(callback):
     path = request.path
     # Log the failure for the audit trail
     log_action("anonymous", "AUTHENTICATION_FAILURE", f"Missing token for {path}")
-
-    return jsonify({
-        "error": "unauthorized",
-        "message": "Missing Authorization Header"
-    }), 401
+    return render_template("error.html", error_message="Unauthorized access. Please log in."), 401
 
 @jwt.expired_token_loader
 def expired_token_response(jwt_header, jwt_payload):
@@ -39,10 +35,7 @@ def expired_token_response(jwt_header, jwt_payload):
 
     log_action(user_id, "AUTHENTICATION_FAILURE", f"Expired token for {path}")
 
-    return jsonify({
-        "error": "token_expired",
-        "message": "Your session has expired. Please log in again."
-    }), 401
+    return render_template("error.html", error_message="Your session has expired. Please log in."), 401
 
 uri = os.getenv("MONGO_DB_URI")
 client = MongoClient(uri, server_api=ServerApi('1'))
@@ -153,14 +146,20 @@ def require_role(*roles):
     return decorator
 
 # Error
+@app.errorhandler(404)
+def handle_404_error(error):
+    return render_template("error.html", error_message="The page you are looking for does not exist."), 404
+
 @app.errorhandler(401)
 def handle_401_error(error):
-    return render_template("error.html", error_message="Unauthorized access. Please log in."), 401
+    return render_template("error.html", error_message="Your session is no longer valid. Please log in again."), 401
 
-# Error Handler for 403 Forbidden (Missing Authorization/Role)
 @app.errorhandler(403)
 def handle_403_error(error):
-    return render_template("error.html", error_message="Forbidden access. You do not have permission to access this page."), 403
+    return render_template("error.html", error_message="You do not have permission to view this page."), 403
+@app.route("/error")
+def error():
+    return render_template("error.html"), 403
 
 # Login/Authentication
 @app.route("/api/login", methods=["POST"])

@@ -1064,7 +1064,7 @@
         $(`page-${name}`).classList.add("active");
         const items = document.querySelectorAll(".nav-item");
         items.forEach((i) => {
-          if (i.getAttribute("onclick")?.includes(name))
+          if (i.getAttribute("onclick")?.includes(`'${name}'`))
             i.classList.add("active");
         });
 

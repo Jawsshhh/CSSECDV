@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Access Denied</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link href="{{ url_for('static', filename='error.css') }}" rel="stylesheet" />
+  </head>
+
+  <body>
+    <div id="error-page">
+      <div class="error-card">
+
+        <div class="error-logo">
+          <div class="error-icon">⛔</div>
+          <h1>Access Denied</h1>
+          <span>{{ error_message | default("You do not have permission to view this page.") }}</span>
+        </div>
+
+        <div class="error-details">
+          <p>If you believe this is a mistake, please ensure you are:</p>
+          <ul>
+            <li>Logged in with a valid account</li>
+            <li>Authorised to access this section</li>
+          </ul>
+          <p>Otherwise, return to the <a href="/">Login</a> page.</p>
+        </div>
+
+        <div class="error-actions">
+          <button class="btn btn-ghost" onclick="window.history.back();">Go Back</button>
+          <a href="/"><button class="btn btn-primary">Login</button></a>
+        </div>
+
+      </div>
+    </div>
+  </body>
+</html>
